@@ -49,6 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <!-- Live Auto-Deploy Test Banner -->
+    <div style="background: #16a34a; color: #ffffff; text-align: center; font-weight: 700; padding: 12px; border-radius: 12px; margin-bottom: 20px; font-size: 1.05rem; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);">
+        🚀 GIT AUTO-DEPLOY IS WORKING! (ટેસ્ટ સફળ)
+    </div>
+
     <div class="login-card">
         <h2 class="fs-5 fw-bold mb-4 text-center">Student Portal Login</h2>
 
