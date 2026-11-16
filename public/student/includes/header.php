@@ -28,8 +28,8 @@ $activePage = $activePage ?? 'dashboard';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     
-    <!-- Custom Student CSS with Cache Busting -->
-    <link rel="stylesheet" href="/public/student/assets/css/student.css?v=<?= filemtime(__DIR__ . '/../assets/css/student.css') ?>">
+    <!-- Custom Student CSS with Cache Busting v2 -->
+    <link rel="stylesheet" href="/public/student/assets/css/student.css?v=<?= time() ?>">
 </head>
 <body>
 

@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <p class="login-subtitle">સ્ટુડન્ટ મેનેજમેન્ટ પોર્ટલ</p>
     </div>
 
-    <!-- PWA Install Banner (Mandatory on mobile browser) -->
+    <!-- PWA Install Banner (Mandatory on mobile browser) v2 -->
     <div id="pwaInstallCard" class="card-app mb-4" style="padding: 16px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 14px; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);">
         <div class="d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">

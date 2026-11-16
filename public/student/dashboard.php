@@ -107,7 +107,7 @@ if ($s['entry_date'] && $s['final_expiry_date']) {
 </div>
 <?php endif; ?>
 
-<!-- PWA Install Banner on Dashboard -->
+<!-- PWA Install Banner on Dashboard v2 -->
 <div id="pwaInstallCard" class="card-app mb-3 pwa-install-trigger" style="padding: 12px 16px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(30, 58, 138, 0.2);">
     <div class="d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-2">
