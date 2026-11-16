@@ -42,7 +42,7 @@ $activePage = $activePage ?? 'dashboard';
     </a>
     <div class="header-actions">
         <!-- PWA Install button in header -->
-        <button id="pwaInstallBtn" class="btn btn-sm btn-light text-primary rounded-pill px-3 fw-bold" style="display:none; font-size: 0.8rem;">
+        <button id="pwaInstallBtn" type="button" class="btn btn-sm btn-light text-primary rounded-pill px-3 fw-bold pwa-install-trigger" style="font-size: 0.8rem;" onclick="triggerPwaInstall();">
             <i class="bi bi-download me-1"></i> Install App
         </button>
         <a href="/public/student/notices.php" class="text-secondary text-decoration-none position-relative me-2 fs-5" title="Notices">

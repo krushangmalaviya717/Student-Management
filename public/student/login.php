@@ -31,15 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <p class="login-subtitle">સ્ટુડન્ટ મેનેજમેન્ટ પોર્ટલ</p>
     </div>
 
-    <!-- PWA Install Banner (Hidden by default, shown via JS if available) -->
-    <div id="pwaInstallCard" class="card-app mb-4" style="display:none; padding: 16px; background: linear-gradient(135deg, #0b132b 0%, #1e3a8a 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px;">
+    <!-- PWA Install Banner (Mandatory on mobile browser) -->
+    <div id="pwaInstallCard" class="card-app mb-4" style="padding: 16px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 14px; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);">
         <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <div class="fw-bold fs-6"><i class="bi bi-phone"></i> એપ ડાઉનલોડ કરો</div>
-                <div class="small opacity-75" style="font-size: 0.75rem;">હોમ સ્ક્રીન પર ઉમેરો</div>
+            <div class="d-flex align-items-center gap-2">
+                <div style="background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                    <i class="bi bi-phone"></i>
+                </div>
+                <div>
+                    <div class="fw-bold" style="font-size: 0.95rem;">એપ ડાઉનલોડ કરો</div>
+                    <div class="small opacity-75" style="font-size: 0.75rem;">હોમ સ્ક્રીન પર ઉમેરીને વાપરો</div>
+                </div>
             </div>
-            <button class="btn btn-sm bg-white rounded-pill px-3 fw-bold" style="color: #1e3a8a;" onclick="document.getElementById('pwaInstallBtn').click();">
-                ઇન્સ્ટોલ
+            <button type="button" class="btn btn-sm bg-white rounded-pill px-3 py-2 fw-bold pwa-install-trigger" style="color: #1e3a8a; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" onclick="triggerPwaInstall();">
+                <i class="bi bi-download me-1"></i> ઇન્સ્ટોલ
             </button>
         </div>
     </div>
