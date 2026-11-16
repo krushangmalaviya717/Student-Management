@@ -1,0 +1,9 @@
+.env
+*.zip
+scratch/
+uploads/photos/*
+!uploads/photos/.gitkeep
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

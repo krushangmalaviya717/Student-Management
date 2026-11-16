@@ -1,0 +1,9 @@
+{
+  "name": "student-management",
+  "version": "1.0.0",
+  "description": "Student Management System",
+  "scripts": {
+    "start": "C:\\xampp\\php\\php.exe start.php",
+    "dev": "C:\\xampp\\php\\php.exe start.php"
+  }
+}

@@ -1,0 +1,469 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Anek+Gujarati:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --primary: #1e3a8a;          /* Executive Royal Navy */
+  --primary-accent: #2563eb;   /* Sapphire Blue */
+  --primary-light: #eff6ff;
+  --secondary: #0f172a;        /* Deep Slate Navy */
+  --bg-color: #f8fafc;         /* Crisp Light Slate Background */
+  --text-dark: #0f172a;        /* High-Contrast Charcoal */
+  --text-muted: #64748b;       /* Slate */
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --radius-xl: 20px;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+  --shadow-soft: 0 10px 25px -5px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 2px 8px -2px rgba(15, 23, 42, 0.05);
+  --shadow-btn: 0 6px 16px -4px rgba(30, 58, 138, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Anek Gujarati', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-dark);
+  margin: 0;
+  padding: 0;
+  padding-bottom: 90px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphism Header */
+.app-header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 14px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.brand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--secondary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand i {
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.brand-icon {
+  color: var(--primary);
+  font-size: 1.3rem;
+}
+
+.header-actions a {
+  color: var(--secondary);
+  font-size: 1.25rem;
+  margin-left: 12px;
+  transition: opacity 0.2s;
+}
+
+/* Floating Bottom Navigation */
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: #ffffff;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px 8px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
+  z-index: 1000;
+}
+
+.mobile-bottom-nav .nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: all 0.25s ease;
+  position: relative;
+  flex: 1;
+}
+
+.mobile-bottom-nav .nav-item i {
+  font-size: 1.35rem;
+  margin-bottom: 3px;
+  transition: all 0.25s ease;
+}
+
+.mobile-bottom-nav .nav-item.active {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.mobile-bottom-nav .nav-item.active i {
+  transform: translateY(-2px);
+  color: #1e3a8a;
+}
+
+/* Container */
+.container-app {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 18px 16px;
+}
+
+/* Cards */
+.card-app {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-title {
+  font-size: 1.02rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title > span > i,
+.card-title > i {
+  color: var(--primary);
+  margin-right: 8px;
+  font-size: 1.15rem;
+  background: var(--primary-light);
+  padding: 5px 7px;
+  border-radius: 6px;
+}
+
+.card-title .btn i,
+.card-title a i {
+  background: transparent !important;
+  padding: 0 !important;
+  margin-right: 4px !important;
+  font-size: 0.95rem !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.form-control-app {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-dark);
+  transition: all 0.25s ease;
+}
+
+.form-control-app:focus {
+  outline: none;
+  border-color: var(--primary-accent);
+  background: var(--card-bg);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Executive Buttons */
+.btn-app {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.98rem;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-app:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(30, 58, 138, 0.35);
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+}
+
+.btn-outline-app {
+  background: transparent;
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.btn-outline-app:hover {
+  background: var(--primary-light);
+}
+
+/* Dashboard Hero Card */
+.hero-card {
+  background: linear-gradient(135deg, #0b132b 0%, #1c2541 55%, #1e3a8a 100%);
+  border-radius: var(--radius-lg);
+  padding: 24px 22px;
+  color: white;
+  margin-bottom: 20px;
+  box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.25) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-title {
+  font-size: 1.38rem;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.hero-subtitle {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+/* Badges */
+.badge-app {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.badge-waiting { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.badge-completed { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.badge-draft { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+/* Grid Actions */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.action-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 20px 14px 18px 14px;
+  text-align: center;
+  text-decoration: none;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(15, 23, 42, 0.08);
+}
+
+.action-card:active {
+  transform: scale(0.98);
+}
+
+.action-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+  font-size: 1.35rem;
+  transition: all 0.25s ease;
+}
+
+/* 1. Profile Tile - Royal Sapphire */
+.action-card.profile .action-icon-wrapper {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #dbeafe;
+}
+.action-card.profile:hover {
+  border-color: #93c5fd;
+}
+.action-card.profile:hover .action-icon-wrapper {
+  background: #1d4ed8;
+  color: #ffffff;
+  border-color: #1d4ed8;
+}
+
+/* 2. Fees Tile - Rich Emerald */
+.action-card.fees .action-icon-wrapper {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+.action-card.fees:hover {
+  border-color: #86efac;
+}
+.action-card.fees:hover .action-icon-wrapper {
+  background: #047857;
+  color: #ffffff;
+  border-color: #047857;
+}
+
+/* 3. Requests Tile - Warm Burnished Amber */
+.action-card.req .action-icon-wrapper {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+.action-card.req:hover {
+  border-color: #fcd34d;
+}
+.action-card.req:hover .action-icon-wrapper {
+  background: #b45309;
+  color: #ffffff;
+  border-color: #b45309;
+}
+
+/* 4. Batch & Schedule Tile - Regal Indigo / Purple */
+.action-card.batch .action-icon-wrapper {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+.action-card.batch:hover {
+  border-color: #c4b5fd;
+}
+.action-card.batch:hover .action-icon-wrapper {
+  background: #6d28d9;
+  color: #ffffff;
+  border-color: #6d28d9;
+}
+
+/* 5. Certificate Tile - Ruby / Crimson */
+.action-card.cert .action-icon-wrapper {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+.action-card.cert:hover {
+  border-color: #fca5a5;
+}
+.action-card.cert:hover .action-icon-wrapper {
+  background: #b91c1c;
+  color: #ffffff;
+  border-color: #b91c1c;
+}
+
+.action-label {
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.88rem;
+  letter-spacing: -0.2px;
+}
+
+/* Progress Bar */
+.progress-wrapper {
+  margin-top: 18px;
+}
+.progress-bg {
+  background: #e2e8f0;
+  height: 9px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+.progress-fill {
+  background: linear-gradient(90deg, #1e3a8a 0%, #059669 100%);
+  height: 100%;
+  border-radius: 10px;
+}
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Info Row */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.info-value {
+  color: var(--text-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: right;
+}
