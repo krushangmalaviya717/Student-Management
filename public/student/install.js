@@ -1,4 +1,4 @@
-// PWA Installation & Service Worker Manager v2
+// PWA Installation & Service Worker Manager v3
 let deferredPrompt = null;
 
 // Check if running in standalone mode (already installed app)
