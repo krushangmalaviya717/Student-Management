@@ -22,7 +22,10 @@ $activePage = $activePage ?? 'dashboard';
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Devangi Classes">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png">
+    <link rel="apple-touch-icon" href="/public/student/assets/icon-192.png">
+
+    <!-- Load PWA script early in head so beforeinstallprompt is never missed -->
+    <script src="/public/student/install.js?v=<?= time() ?>"></script>
 
     <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">

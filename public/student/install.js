@@ -1,27 +1,32 @@
-// PWA Installation & Service Worker Manager v4
+// Devangi Classes PWA Installation Manager v5
 let deferredPrompt = null;
 
-// Standalone mode check
+// Standalone mode check (is app already installed and running?)
 function isRunningStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches 
     || window.navigator.standalone === true 
     || document.referrer.includes('android-app://');
 }
 
-// iOS Device check (handles modern iPadOS as well)
+// iOS Device check
 function isIosDevice() {
   const ua = window.navigator.userAgent.toLowerCase();
   return /iphone|ipad|ipod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-// Listen for native install prompt (Android Chrome / Edge / Desktop)
+// Listen for native install prompt as early as possible
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  console.log('PWA: Native prompt ready');
+  console.log('PWA: Native beforeinstallprompt captured successfully!');
+  
+  // Show all install triggers
+  document.querySelectorAll('.pwa-install-trigger, #pwaInstallCard, #pwaInstallBtn').forEach(el => {
+    el.style.display = '';
+  });
 });
 
-// Hide buttons if already installed
+// Hide buttons if already running inside installed standalone app
 function checkInstallState() {
   if (isRunningStandalone()) {
     document.querySelectorAll('.pwa-install-trigger, #pwaInstallCard, #pwaInstallBtn').forEach(el => {
@@ -32,12 +37,13 @@ function checkInstallState() {
 
 // Master Install Trigger
 window.triggerPwaInstall = async function() {
+  // If already running inside installed app
   if (isRunningStandalone()) {
-    alert('એપ પહેલાથી જ તમારા મોબાઇલમાં ઇન્સ્ટોલ થયેલી છે!');
+    alert('✅ આ એપ તમારા ફોનમાં પહેલેથી જ ઇન્સ્ટોલ કરેલી છે!');
     return;
   }
 
-  // 1. Android / Desktop with native prompt available
+  // 1. Android / Chrome: Native 1-Click Install Prompt
   if (deferredPrompt) {
     try {
       deferredPrompt.prompt();
@@ -49,7 +55,7 @@ window.triggerPwaInstall = async function() {
       }
       return;
     } catch (err) {
-      console.warn('Prompt error:', err);
+      console.warn('PWA prompt error:', err);
     }
   }
 
@@ -59,7 +65,7 @@ window.triggerPwaInstall = async function() {
     return;
   }
 
-  // 3. Android fallback (if prompt hasn't fired yet)
+  // 3. Android Fallback (if native prompt is delayed or user already added)
   showAndroidModal();
 };
 
@@ -68,7 +74,7 @@ function showIosModal() {
   if (existing) existing.remove();
 
   const html = `
-    <div id="iosInstallModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999999;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;backdrop-filter:blur(4px);animation:fadeIn 0.2s ease;">
+    <div id="iosInstallModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999999;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;backdrop-filter:blur(4px);">
       <div style="background:#ffffff;border-radius:24px 24px 0 0;padding:26px 22px;max-width:500px;width:100%;text-align:center;box-shadow:0 -10px 30px rgba(0,0,0,0.3);box-sizing:border-box;">
         <div style="width:44px;height:5px;background:#cbd5e1;border-radius:5px;margin:0 auto 16px;"></div>
         
@@ -115,7 +121,8 @@ function showAndroidModal() {
         </div>
         <h4 style="font-weight:700;color:#0f172a;margin-bottom:8px;font-size:1.15rem;">એપ ઇન્સ્ટોલ કરવા માટે</h4>
         <p style="font-size:0.88rem;color:#475569;margin-bottom:20px;line-height:1.5;">
-          Chrome બ્રાઉઝરમાં ઉપર જમણી બાજુ <b>૩ ટપકાં (⋮)</b> પર ક્લિક કરો અને <b>"Install app"</b> અથવા <b>"Add to Home screen"</b> પસંદ કરો.
+          જો તમારા ફોનમાં એપ પહેલેથી ઉમેરેલી હોય તો હોમ સ્ક્રીન પર જુઓ.<br><br>
+          અથવા Chrome માં ઉપર <b>૩ ટપકાં (⋮)</b> પર ક્લિક કરી <b>"Install app"</b> સિલેક્ટ કરો.
         </p>
         <button type="button" style="width:100%;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:0.95rem;cursor:pointer;" onclick="document.getElementById('androidInstallModal').remove();">
           સમજાઈ ગયું (OK)
@@ -126,8 +133,9 @@ function showAndroidModal() {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-// Attach click listeners to all install trigger buttons
-function attachListeners() {
+// Ensure listeners are bound immediately
+function initPwa() {
+  checkInstallState();
   document.querySelectorAll('.pwa-install-trigger').forEach(btn => {
     btn.onclick = function(e) {
       e.preventDefault();
@@ -136,20 +144,22 @@ function attachListeners() {
   });
 }
 
-window.addEventListener('appinstalled', () => {
-  document.querySelectorAll('.pwa-install-trigger, #pwaInstallCard, #pwaInstallBtn').forEach(el => el.style.display = 'none');
-});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPwa);
+} else {
+  initPwa();
+}
 
-document.addEventListener('DOMContentLoaded', () => {
-  checkInstallState();
-  attachListeners();
+window.addEventListener('appinstalled', () => {
+  console.log('PWA: Successfully installed');
+  document.querySelectorAll('.pwa-install-trigger, #pwaInstallCard, #pwaInstallBtn').forEach(el => el.style.display = 'none');
 });
 
 // Register Service Worker with relative path
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/public/student/sw.js', { scope: '/public/student/' })
-      .then((reg) => console.log('PWA: SW active, scope:', reg.scope))
+      .then((reg) => console.log('PWA: Service Worker Active:', reg.scope))
       .catch((err) => console.warn('PWA: SW note:', err));
   });
 }
