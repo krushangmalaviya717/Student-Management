@@ -1,4 +1,7 @@
         </main>
+        <footer style="text-align: center; padding: 16px 12px; font-size: 12px; color: #888; border-top: 1px solid #edf2f7; margin-top: 32px;">
+            &copy; <?= date('Y') ?> Devangi Sewing Classes &bull; All Rights Reserved &bull; <span style="color: #10b981; font-weight: 600;">● System Active (v1.0.1)</span>
+        </footer>
     </div>
 </div>
 <script>
