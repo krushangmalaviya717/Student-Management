@@ -20,7 +20,7 @@ if ($isLiveServer) {
     define('DB_PORT', '3306');
     define('DB_NAME', 'u594881892_devangistudent');
     define('DB_USER', 'u594881892_devangistudent');
-    define('DB_PASS', 'Krushang@972');
+    define('DB_PASS', 'Devangi@8900');
     define('DB_CHARSET', 'utf8mb4');
 
     define('APP_NAME', 'Devangi Sewing Classes - Student Management');
