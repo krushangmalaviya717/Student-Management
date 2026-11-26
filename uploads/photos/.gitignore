@@ -1,0 +1,6 @@
+# Permanent Internal Safeguard: Ignore all uploaded photos
+# Even if root .gitignore is deleted or modified, this protects photos forever.
+*
+!.gitignore
+!.gitkeep
+!.htaccess
