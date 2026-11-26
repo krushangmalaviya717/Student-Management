@@ -1,42 +1,61 @@
 <?php
 $pageTitle = 'Manage Student Notices';
 require_once __DIR__ . '/../includes/auth.php';
-require_login();
+require_admin();
 require_once __DIR__ . '/../includes/functions.php';
 
-// Fetch batches for filter dropdown
 $batches = db()->query("SELECT id, name FROM batches WHERE is_active = 1")->fetchAll();
 
-// Handle creating new notice
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_notice'])) {
-    $title = trim($_POST['title'] ?? '');
-    $content = trim($_POST['content'] ?? '');
-    $batchId = !empty($_POST['batch_id']) ? (int)$_POST['batch_id'] : null;
-    $priority = $_POST['priority'] ?? 'normal';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
 
-    if (!empty($title) && !empty($content)) {
-        $stmt = db()->prepare(
-            "INSERT INTO student_notices (title, content, batch_id, priority, created_by)
-             VALUES (?, ?, ?, ?, ?)"
-        );
-        $stmt->execute([$title, $content, $batchId, $priority, current_user()['id']]);
+    if (isset($_POST['create_notice'])) {
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+        $batchId = !empty($_POST['batch_id']) ? (int)$_POST['batch_id'] : null;
+        $priority = $_POST['priority'] ?? 'normal';
+        if (!in_array($priority, ['normal', 'important', 'urgent'], true)) {
+            $priority = 'normal';
+        }
 
-        flash('success', "Notice published successfully!");
+        if ($title !== '' && $content !== '') {
+            $stmt = db()->prepare(
+                "INSERT INTO student_notices (title, content, batch_id, priority, created_by)
+                 VALUES (?, ?, ?, ?, ?)"
+            );
+            $stmt->execute([$title, $content, $batchId, $priority, current_user()['id']]);
+            log_audit('notice', (int)db()->lastInsertId(), 'create', null, ['title' => $title, 'priority' => $priority]);
+
+            flash('success', 'Notice published successfully.');
+            redirect('public/notices_admin.php');
+        }
+    } elseif (isset($_POST['update_notice_id'])) {
+        $noticeId = (int)$_POST['update_notice_id'];
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+        $batchId = !empty($_POST['batch_id']) ? (int)$_POST['batch_id'] : null;
+        $priority = $_POST['priority'] ?? 'normal';
+        if (!in_array($priority, ['normal', 'important', 'urgent'], true)) {
+            $priority = 'normal';
+        }
+        if ($noticeId > 0 && $title !== '' && $content !== '') {
+            db()->prepare("UPDATE student_notices SET title = ?, content = ?, batch_id = ?, priority = ? WHERE id = ?")
+                ->execute([$title, $content, $batchId, $priority, $noticeId]);
+            log_audit('notice', $noticeId, 'update', null, ['title' => $title, 'priority' => $priority]);
+            flash('success', 'Notice updated successfully.');
+        }
         redirect('public/notices_admin.php');
-        exit;
+    } elseif (isset($_POST['delete_notice_id'])) {
+        $noticeId = (int)$_POST['delete_notice_id'];
+        if ($noticeId > 0) {
+            db()->prepare("DELETE FROM student_notices WHERE id = ?")->execute([$noticeId]);
+            log_audit('notice', $noticeId, 'delete', null, null);
+            flash('success', 'Notice deleted.');
+        }
+        redirect('public/notices_admin.php');
     }
 }
 
-// Handle deleting notice
-if (isset($_GET['delete'])) {
-    $noticeId = (int)$_GET['delete'];
-    db()->prepare("DELETE FROM student_notices WHERE id = ?")->execute([$noticeId]);
-    flash('success', "Notice deleted.");
-    redirect('public/notices_admin.php');
-    exit;
-}
-
-// Fetch all notices
 $notices = db()->query(
     "SELECT n.*, b.name AS batch_name, u.name AS creator_name 
      FROM student_notices n 
@@ -48,87 +67,226 @@ $notices = db()->query(
 require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
-<div class="row">
-    <!-- Create Notice Form -->
-    <div class="col-md-4">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3>Post New Notice</h3>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="">
-                    <input type="hidden" name="create_notice" value="1">
-                    
-                    <div class="form-group mb-3">
-                        <label class="form-label">Notice Title</label>
-                        <input type="text" name="title" class="form-control" required placeholder="e.g. Diwali Vacation Notice">
-                    </div>
+<style>
+.notice-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.notice-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    background: var(--card-bg);
+}
+.notice-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.notice-item-title {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text);
+}
+.notice-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+.notice-item-body {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-body);
+    line-height: 1.55;
+}
+.empty-state-box {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+}
+.empty-state-box svg {
+    margin-bottom: 8px;
+    opacity: 0.45;
+}
+</style>
 
-                    <div class="form-group mb-3">
-                        <label class="form-label">Target Batch</label>
-                        <select name="batch_id" class="form-control">
-                            <option value="">All Batches (તમામ સ્ટુડન્ટ્સ)</option>
+<div class="layout-split">
+    <!-- Create Notice Form -->
+    <div class="card">
+        <div class="card-header-bar" style="margin-bottom: 14px;">
+            <div>
+                <h2>Post New Notice</h2>
+                <small class="muted">Publish an announcement to the Student Portal.</small>
+            </div>
+        </div>
+
+        <form method="POST" action="">
+            <?= csrf_field() ?>
+            <input type="hidden" name="create_notice" value="1">
+
+            <div class="form-group">
+                <label for="notice_title">Notice Title *</label>
+                <input type="text" id="notice_title" name="title" required placeholder="e.g. Diwali Vacation Notice">
+            </div>
+
+            <div class="form-group">
+                <label for="notice_batch">Target Batch</label>
+                <select id="notice_batch" name="batch_id">
+                    <option value="">All Batches</option>
+                    <?php foreach ($batches as $b): ?>
+                        <option value="<?= $b['id'] ?>"><?= e($b['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="notice_priority">Priority Level</label>
+                <select id="notice_priority" name="priority">
+                    <option value="normal">Normal</option>
+                    <option value="important">Important</option>
+                    <option value="urgent">Urgent</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="notice_content">Notice Content / Message *</label>
+                <textarea id="notice_content" name="content" rows="4" required placeholder="Enter full announcement message..."></textarea>
+            </div>
+
+            <div class="form-actions" style="margin-top: 16px;">
+                <button type="submit" class="btn btn-block">Publish Notice</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Notices List -->
+    <div class="card">
+        <div class="card-header-bar">
+            <div>
+                <h2>Published Student Notices</h2>
+                <small class="muted">All active announcements visible to students.</small>
+            </div>
+            <span class="badge badge-purple"><?= count($notices) ?> Published</span>
+        </div>
+
+        <?php if (empty($notices)): ?>
+            <div class="empty-state-box">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <div style="font-weight: 600; color: var(--text);">No notices posted yet</div>
+                <div style="font-size: 12.5px; margin-top: 2px;">Use the form on the left to publish your first student notice.</div>
+            </div>
+        <?php else: ?>
+            <div class="notice-feed">
+                <?php foreach ($notices as $n):
+                    $prioBadge = $n['priority'] === 'urgent' ? 'badge-red' : ($n['priority'] === 'important' ? 'badge-amber' : 'badge-gray');
+                ?>
+                    <article class="notice-item">
+                        <div class="notice-item-head">
+                            <h3 class="notice-item-title"><?= e($n['title']) ?></h3>
+                            <div class="action-group">
+                                <span class="badge <?= $prioBadge ?>"><?= strtoupper(e($n['priority'])) ?></span>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick='openEditNoticeModal(<?= htmlspecialchars(json_encode([
+                                    "id" => (int)$n["id"],
+                                    "title" => $n["title"],
+                                    "batch_id" => $n["batch_id"] ? (string)$n["batch_id"] : "",
+                                    "priority" => $n["priority"],
+                                    "content" => $n["content"]
+                                ]), ENT_QUOTES, "UTF-8") ?>)'>Edit</button>
+                                <form method="POST" action="" style="display: inline; margin: 0;" onsubmit="return confirm('Delete this notice?');">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="delete_notice_id" value="<?= (int)$n['id'] ?>">
+                                    <button type="submit" class="btn btn-sm btn-danger-ghost">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="notice-item-meta">
+                            <span>Target: <strong><?= e($n['batch_name'] ?: 'All Batches') ?></strong></span>
+                            <span>&bull;</span>
+                            <span>Posted: <?= date('d M Y, h:i A', strtotime($n['created_at'])) ?></span>
+                            <?php if (!empty($n['creator_name'])): ?>
+                                <span>&bull;</span>
+                                <span>By <?= e($n['creator_name']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <p class="notice-item-body"><?= nl2br(e($n['content'])) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Edit Notice Modal -->
+<div class="custom-modal-overlay" id="editNoticeModal">
+    <div class="custom-modal" style="max-width: 520px;">
+        <div class="custom-modal-header">
+            <h3>Edit Notice</h3>
+            <button type="button" class="custom-modal-close" onclick="closeEditNoticeModal()" aria-label="Close">&times;</button>
+        </div>
+        <form method="POST" action="">
+            <?= csrf_field() ?>
+            <input type="hidden" name="update_notice_id" id="edit_notice_id">
+            <div class="custom-modal-body">
+                <div class="form-group">
+                    <label for="edit_notice_title">Notice Title *</label>
+                    <input type="text" id="edit_notice_title" name="title" required>
+                </div>
+                <div class="row">
+                    <div class="form-group">
+                        <label for="edit_notice_batch">Target Batch</label>
+                        <select id="edit_notice_batch" name="batch_id">
+                            <option value="">All Batches</option>
                             <?php foreach ($batches as $b): ?>
                                 <option value="<?= $b['id'] ?>"><?= e($b['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-
-                    <div class="form-group mb-3">
-                        <label class="form-label">Priority Level</label>
-                        <select name="priority" class="form-control">
-                            <option value="normal">Normal (સામાન્ય)</option>
-                            <option value="important">Important (અગત્યનું)</option>
-                            <option value="urgent">Urgent (અતિ અગત્યનું)</option>
+                    <div class="form-group">
+                        <label for="edit_notice_priority">Priority Level</label>
+                        <select id="edit_notice_priority" name="priority">
+                            <option value="normal">Normal</option>
+                            <option value="important">Important</option>
+                            <option value="urgent">Urgent</option>
                         </select>
                     </div>
-
-                    <div class="form-group mb-3">
-                        <label class="form-label">Notice Content / Message</label>
-                        <textarea name="content" class="form-control" rows="4" required placeholder="સૂચનાની વિગત લખો..."></textarea>
-                    </div>
-
-                    <div style="margin-top:16px;">
-                        <button type="submit" class="btn btn-primary w-100">Publish Notice</button>
-                    </div>
-                </form>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="edit_notice_content">Notice Content *</label>
+                    <textarea id="edit_notice_content" name="content" rows="4" required></textarea>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Notices List -->
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3>Published Student Notices</h3>
+            <div class="custom-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditNoticeModal()">Cancel</button>
+                <button type="submit" class="btn">Save Changes</button>
             </div>
-            <div class="card-body">
-                <?php if (empty($notices)): ?>
-                    <p class="text-muted">No notices posted yet.</p>
-                <?php else: ?>
-                    <div class="list-group">
-                        <?php foreach ($notices as $n): ?>
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <h5 class="mb-0 fw-bold"><?= e($n['title']) ?></h5>
-                                    <div>
-                                        <span class="badge badge-<?= $n['priority'] === 'urgent' ? 'danger' : ($n['priority'] === 'important' ? 'warning' : 'secondary') ?>">
-                                            <?= strtoupper($n['priority']) ?>
-                                        </span>
-                                        <a href="?delete=<?= $n['id'] ?>" onclick="return confirm('Delete this notice?')" class="btn btn-sm btn-outline-danger ms-2">Delete</a>
-                                    </div>
-                                </div>
-                                <div class="text-muted small mb-2">
-                                    Target: <strong><?= e($n['batch_name'] ?: 'All Batches') ?></strong> | Posted: <?= date('d-m-Y h:i A', strtotime($n['created_at'])) ?>
-                                </div>
-                                <p class="mb-0 text-dark"><?= nl2br(e($n['content'])) ?></p>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
+
+<script>
+function openEditNoticeModal(n) {
+    document.getElementById('edit_notice_id').value = n.id;
+    document.getElementById('edit_notice_title').value = n.title || '';
+    document.getElementById('edit_notice_batch').value = n.batch_id || '';
+    document.getElementById('edit_notice_priority').value = n.priority || 'normal';
+    document.getElementById('edit_notice_content').value = n.content || '';
+    document.getElementById('editNoticeModal').classList.add('active');
+}
+function closeEditNoticeModal() {
+    document.getElementById('editNoticeModal').classList.remove('active');
+}
+window.addEventListener('click', function(e) {
+    if (e.target === document.getElementById('editNoticeModal')) closeEditNoticeModal();
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/layout_footer.php'; ?>

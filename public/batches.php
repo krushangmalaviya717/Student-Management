@@ -9,7 +9,6 @@ require_login();
 $user = current_user();
 $error = null;
 
-// Handle POST actions via BatchService (Requirement 2 & 5)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_admin();
     verify_csrf();
@@ -19,14 +18,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'add_batch') {
             $name = trim($_POST['name'] ?? '');
             BatchService::createBatch($_POST, (int)$user['id']);
-            flash('success', "નવી બેચ '{$name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે.");
+            flash('success', "Batch '{$name}' created successfully.");
             redirect('public/batches.php');
 
         } elseif ($action === 'edit_batch') {
             $id = (int)($_POST['id'] ?? 0);
             $name = trim($_POST['name'] ?? '');
             BatchService::updateBatch($id, $_POST, (int)$user['id']);
-            flash('success', "બેચ '{$name}' ની વિગતો સફળતાપૂર્વક અપડેટ થઈ ગઈ છે.");
+            flash('success', "Batch '{$name}' updated successfully.");
             redirect('public/batches.php');
 
         } elseif ($action === 'delete_batch') {
@@ -39,11 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)($_POST['id'] ?? 0);
             $batch = BatchService::getBatchById($id);
             if (!$batch) {
-                throw new RuntimeException('બેચ મળી નથી.');
+                throw new RuntimeException('Batch not found.');
             }
             BatchService::toggleStatus($id, (int)$user['id']);
-            $statusText = $batch['is_active'] ? 'બંધ (Inactive)' : 'ચાલુ (Active)';
-            flash('success', "બેચ '{$batch['name']}' નું સ્ટેટસ બદલીને {$statusText} કરવામાં આવ્યું છે.");
+            $statusText = $batch['is_active'] ? 'Inactive' : 'Active';
+            flash('success', "Batch '{$batch['name']}' status changed to {$statusText}.");
             redirect('public/batches.php');
         }
     } catch (Throwable $e) {
@@ -51,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all batches
 $batches = BatchService::getAllBatches();
 $totalCapacity = 0;
 $totalActive = 0;
@@ -72,7 +70,6 @@ unset($b);
 
 $totalAvailable = max(0, $totalCapacity - $totalActive);
 
-// Excel Export Handler (Requirement 3: Reusable ExportService)
 if (($_GET['export'] ?? '') === 'excel') {
     $headers = ['ID', 'Batch Name', 'Days', 'Start Time', 'End Time', 'Capacity', 'Active Students', 'Available Seats', 'Waiting in Queue', 'Status'];
     $rows = [];
@@ -98,46 +95,8 @@ require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
 <style>
-/* Custom Batch Management UI Styles */
-.batch-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-}
-@media (max-width: 900px) {
-    .batch-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 500px) {
-    .batch-kpi-grid { grid-template-columns: 1fr; }
-}
-
-.batch-kpi-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 16px 18px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.batch-kpi-val {
-    font-size: 26px;
-    font-weight: 800;
-    color: #111827;
-    line-height: 1.1;
-    margin-bottom: 6px;
-}
-.batch-kpi-lbl {
-    font-size: 13px;
-    font-weight: 600;
-    color: #64748b;
-}
-
-/* Progress bar inside table */
 .occupancy-bar-bg {
-    background: #e2e8f0;
+    background: var(--border);
     border-radius: 999px;
     height: 6px;
     overflow: hidden;
@@ -149,215 +108,231 @@ require_once __DIR__ . '/../includes/layout_header.php';
     border-radius: 999px;
     transition: width 0.3s ease;
 }
+.batch-time-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 3px;
+}
 </style>
 
 <?php if ($error): ?>
-    <div class="flash flash-error" style="margin-bottom: 20px;">
-        <?= e($error) ?>
-    </div>
+    <div class="flash flash-error"><?= e($error) ?></div>
 <?php endif; ?>
 
 <!-- Top Summary KPIs -->
-<div class="batch-kpi-grid">
-    <div class="batch-kpi-card">
-        <div class="batch-kpi-val"><?= count($batches) ?></div>
-        <div class="batch-kpi-lbl">Total Batches (કુલ બેચ)</div>
-    </div>
-    <div class="batch-kpi-card">
-        <div class="batch-kpi-val"><?= $totalActive ?> <span style="font-size:16px; color:#64748b; font-weight:500;">/ <?= $totalCapacity ?></span></div>
-        <div class="batch-kpi-lbl">Enrolled Students (ભરાયેલી સીટ)</div>
-    </div>
-    <div class="batch-kpi-card">
-        <div class="batch-kpi-val" style="color: #0891b2;"><?= $totalAvailable ?></div>
-        <div class="batch-kpi-lbl">Available Seats (ખાલી સીટો)</div>
-    </div>
-    <div class="batch-kpi-card">
-        <div class="batch-kpi-val" style="color: #d97706;"><?= $totalWaiting ?></div>
-        <div class="batch-kpi-lbl">Waiting Candidates (કુલ વેઇટિંગ)</div>
-    </div>
+<div class="grid grid-4" style="margin-bottom: 20px;">
+    <?= render_kpi_card(
+        'Total Batches',
+        count($batches),
+        'Configured time slots',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>'
+    ) ?>
+    <?= render_kpi_card(
+        'Enrolled Students',
+        $totalActive . ' / ' . $totalCapacity,
+        'Occupied seats across active batches',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>'
+    ) ?>
+    <?= render_kpi_card(
+        'Available Seats',
+        $totalAvailable,
+        'Open for immediate joining',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+        $totalAvailable > 0 ? 'success' : 'default'
+    ) ?>
+    <?= render_kpi_card(
+        'Waiting Candidates',
+        $totalWaiting,
+        'Total queued across batches',
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        $totalWaiting > 0 ? 'warning' : 'default'
+    ) ?>
 </div>
 
 <!-- Main Card & Action Bar -->
 <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+    <div class="card-header-bar">
         <div>
-            <h2 class="mt-0" style="margin-bottom: 3px;">Batches Schedule &amp; Capacity (બેચ યાદી)</h2>
-            <small class="muted">દરેક બેચનો સમય, ક્ષમતા (સીટો) અને હાલની ઉપલબ્ધતા અહીંથી સરળતાથી મેનેજ કરો.</small>
+            <h2>Batches Schedule &amp; Capacity</h2>
+            <small class="muted">Manage batch schedules, seat limits, and active availability.</small>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <?= render_export_button('?export=excel', 'Export to Excel (CSV)') ?>
+        <div class="action-group">
+            <?= render_export_button('?export=excel', 'Export CSV') ?>
             <?php if (is_admin_or_above()): ?>
-            <button class="btn btn-sm" onclick="openAddModal()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Add New Batch (નવી બેચ ઉમેરો)
+            <button type="button" class="btn btn-sm" onclick="openAddModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Add New Batch</span>
             </button>
             <?php endif; ?>
         </div>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Batch Name &amp; Timing (બેચ અને સમય)</th>
-                <th>Days (દિવસો)</th>
-                <th>Occupancy (સીટ વિગત)</th>
-                <th>Available Seats (ખાલી)</th>
-                <th>Waiting Queue (વેઇટિંગ)</th>
-                <th>Status</th>
-                <th style="text-align:right;">Actions (ઓપરેશન્સ)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($batches as $b): 
-                $pct = $b['capacity'] > 0 ? min(100, round(($b['active_count'] / $b['capacity']) * 100)) : 0;
-                $barColor = $pct >= 100 ? '#dc2626' : ($pct >= 75 ? '#d97706' : '#16a34a');
-                $startTimeFmt = date('h:i A', strtotime($b['start_time']));
-                $endTimeFmt = date('h:i A', strtotime($b['end_time']));
-            ?>
-            <tr style="<?= !$b['is_active'] ? 'opacity:0.65; background:#fafafa;' : '' ?>">
-                <td>
-                    <div style="font-weight: 700; font-size: 14.5px; color:#111827;"><?= e($b['name']) ?></div>
-                    <div style="margin-top: 4px;">
-                        <span class="badge badge-purple" style="font-size: 11px; padding: 2px 8px;">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px; margin-right:3px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><?= $startTimeFmt ?> - <?= $endTimeFmt ?>
-                        </span>
-                    </div>
-                </td>
-                <td>
-                    <span class="badge badge-gray" style="font-weight: 600;"><?= e($b['batch_days']) ?></span>
-                </td>
-                <td>
-                    <div style="font-weight: 700; font-size: 13.5px;">
-                        <?= $b['active_count'] ?> / <?= $b['capacity'] ?> Students
-                        <span style="font-size:11px; color:<?= $barColor ?>; font-weight:700; margin-left:4px;">(<?= $pct ?>%)</span>
-                    </div>
-                    <div class="occupancy-bar-bg">
-                        <div class="occupancy-bar-fill" style="width: <?= $pct ?>%; background: <?= $barColor ?>;"></div>
-                    </div>
-                </td>
-                <td>
-                    <?php if ($b['available'] <= 0): ?>
-                        <span class="badge badge-red" style="font-weight:700;">Full (હાઉસફુલ)</span>
-                    <?php else: ?>
-                        <span class="badge badge-green" style="font-weight:700;"><?= $b['available'] ?> Seats Available</span>
-                    <?php endif; ?>
-                </td>
-                <td>
-                    <?php if ($b['waiting_count'] > 0): ?>
-                        <a href="<?= url('public/waiting_list.php?batch=' . $b['id']) ?>" class="badge badge-amber" style="font-weight:700; text-decoration:none;">
-                            <?= $b['waiting_count'] ?> Candidates
-                        </a>
-                    <?php else: ?>
-                        <span class="muted" style="font-size: 13px;">0 Waiting</span>
-                    <?php endif; ?>
-                </td>
-                <td>
-                    <?php if ($b['is_active']): ?>
-                        <span class="badge badge-green">Active</span>
-                    <?php else: ?>
-                        <span class="badge badge-gray">Inactive</span>
-                    <?php endif; ?>
-                </td>
-                <td style="text-align: right; white-space: nowrap;">
-                    <div style="display: inline-flex; gap: 6px; align-items: center;">
-                        <!-- View Students link -->
-                        <a href="<?= url('public/students_list.php?batch_id=' . $b['id']) ?>" class="btn btn-sm btn-secondary" style="font-size: 12px; padding: 5px 10px;" title="આ બેચના વિદ્યાર્થીઓ જુઓ">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px; margin-right:3px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>Students
-                        </a>
-
-                        <?php if (is_admin_or_above()): ?>
-                        <!-- Edit Button -->
-                        <button type="button" class="btn btn-sm btn-secondary" style="font-size: 12px; padding: 5px 10px;" onclick='openEditModal(<?= json_encode($b) ?>)'>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px; margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Edit
-                        </button>
-
-                        <!-- Quick Status Toggle -->
-                        <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('શું તમે આ બેચનું સ્ટેટસ બદલવા માંગો છો?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="toggle_status">
-                            <input type="hidden" name="id" value="<?= $b['id'] ?>">
-                            <button type="submit" class="btn btn-sm btn-secondary" style="font-size: 12px; padding: 5px 8px;" title="<?= $b['is_active'] ? 'Deactivate Batch' : 'Activate Batch' ?>">
-                                <?php if ($b['is_active']): ?>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                                <?php else: ?>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                                <?php endif; ?>
-                            </button>
-                        </form>
-
-                        <!-- Delete Button -->
-                        <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('શું તમે ખરેખર બેચ \'<?= addslashes($b['name']) ?>\' ડિલીટ કરવા માંગો છો?');">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="delete_batch">
-                            <input type="hidden" name="id" value="<?= $b['id'] ?>">
-                            <button type="submit" class="btn btn-sm btn-danger" style="font-size: 12px; padding: 5px 8px;" title="Delete Batch">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                            </button>
-                        </form>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Batch Name &amp; Timing</th>
+                    <th>Days</th>
+                    <th>Occupancy</th>
+                    <th>Availability</th>
+                    <th>Waiting Queue</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($batches as $b):
+                    $pct = $b['capacity'] > 0 ? min(100, round(($b['active_count'] / $b['capacity']) * 100)) : 0;
+                    $barColor = $pct >= 100 ? 'var(--danger)' : ($pct >= 75 ? 'var(--warning)' : 'var(--success)');
+                    $startTimeFmt = date('h:i A', strtotime($b['start_time']));
+                    $endTimeFmt = date('h:i A', strtotime($b['end_time']));
+                ?>
+                <tr style="<?= !$b['is_active'] ? 'opacity:0.65;' : '' ?>">
+                    <td>
+                        <div style="font-weight: 600; color: var(--text);"><?= e($b['name']) ?></div>
+                        <div class="batch-time-meta">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <span><?= $startTimeFmt ?> - <?= $endTimeFmt ?></span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge badge-gray"><?= e($b['batch_days']) ?></span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;">
+                            <?= $b['active_count'] ?> / <?= $b['capacity'] ?> Students
+                            <span style="font-size: 11.5px; color: <?= $barColor ?>; margin-left: 4px;">(<?= $pct ?>%)</span>
+                        </div>
+                        <div class="occupancy-bar-bg">
+                            <div class="occupancy-bar-fill" style="width: <?= $pct ?>%; background: <?= $barColor ?>;"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <?php if ($b['available'] <= 0): ?>
+                            <span class="badge badge-red">Full</span>
+                        <?php else: ?>
+                            <span class="badge badge-green"><?= $b['available'] ?> Seats Available</span>
                         <?php endif; ?>
-                    </div>
-                </td>
-            </tr>
-            <?php endforeach; ?>
+                    </td>
+                    <td>
+                        <?php if ($b['waiting_count'] > 0): ?>
+                            <a href="<?= url('public/waiting_list.php?batch=' . $b['id']) ?>" class="badge badge-amber">
+                                <?= $b['waiting_count'] ?> Candidates
+                            </a>
+                        <?php else: ?>
+                            <span class="muted">0 Waiting</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($b['is_active']): ?>
+                            <span class="badge badge-green">Active</span>
+                        <?php else: ?>
+                            <span class="badge badge-gray">Inactive</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-right" style="white-space: nowrap;">
+                        <div class="action-group" style="justify-content: flex-end;">
+                            <a href="<?= url('public/students_list.php?batch_id=' . $b['id']) ?>" class="btn btn-sm btn-secondary" title="View students in this batch">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                <span>Students</span>
+                            </a>
 
-            <?php if (!$batches): ?>
-            <tr>
-                <td colspan="7" class="muted" style="text-align: center; padding: 30px;">
-                    હજુ સુધી કોઈ બેચ ઉમેરવામાં આવી નથી. ઉપરના <strong>Add New Batch</strong> બટન પર ક્લિક કરીને પ્રથમ બેચ ઉમેરો.
-                </td>
-            </tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
+                            <?php if (is_admin_or_above()): ?>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick='openEditModal(<?= htmlspecialchars(json_encode($b), ENT_QUOTES, 'UTF-8') ?>)' title="Edit Batch">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                <span>Edit</span>
+                            </button>
+
+                            <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('Toggle active status for this batch?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="toggle_status">
+                                <input type="hidden" name="id" value="<?= $b['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-icon btn-secondary" title="<?= $b['is_active'] ? 'Deactivate Batch' : 'Activate Batch' ?>">
+                                    <?php if ($b['is_active']): ?>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                    <?php else: ?>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    <?php endif; ?>
+                                </button>
+                            </form>
+
+                            <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('Delete batch \'<?= addslashes($b['name']) ?>\' permanently?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="delete_batch">
+                                <input type="hidden" name="id" value="<?= $b['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-icon btn-danger-ghost" title="Delete Batch">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+
+                <?php if (!$batches): ?>
+                <tr>
+                    <td colspan="7" class="muted" style="text-align: center; padding: 36px 20px;">
+                        No batches configured yet. Click <strong>Add New Batch</strong> to create your first batch.
+                    </td>
+                </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- ==================== ADD BATCH MODAL ==================== -->
 <div class="custom-modal-overlay" id="addBatchModal">
-    <div class="custom-modal-box">
+    <div class="custom-modal">
         <div class="custom-modal-header">
-            <h3>Add New Batch (નવી બેચ ઉમેરો)</h3>
-            <button type="button" class="custom-modal-close" onclick="closeAddModal()">&times;</button>
+            <h3>Add New Batch</h3>
+            <button type="button" class="custom-modal-close" onclick="closeAddModal()" aria-label="Close">&times;</button>
         </div>
         <form method="post" action="">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="add_batch">
-            
+
             <div class="custom-modal-body">
-                <div style="margin-bottom: 14px;">
-                    <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Batch Name (બેચનું નામ) *</label>
-                    <input type="text" name="name" id="add_batch_name" required placeholder="દા.ત. 07:00 AM - 09:00 AM અથવા Morning Batch" style="width: 100%;">
+                <div class="form-group">
+                    <label for="add_batch_name">Batch Name *</label>
+                    <input type="text" name="name" id="add_batch_name" required placeholder="e.g. 07:00 AM - 09:00 AM">
                 </div>
 
-                <div class="grid grid-2" style="margin-bottom: 14px;">
+                <div class="row form-group">
                     <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Start Time (શરૂ થવાનો સમય) *</label>
-                        <input type="time" name="start_time" id="add_start_time" required value="07:00" style="width: 100%;" onchange="autoGenerateAddName()">
+                        <label for="add_start_time">Start Time *</label>
+                        <input type="time" name="start_time" id="add_start_time" required value="07:00" onchange="autoGenerateAddName()">
                     </div>
                     <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">End Time (પૂરો થવાનો સમય) *</label>
-                        <input type="time" name="end_time" id="add_end_time" required value="09:00" style="width: 100%;" onchange="autoGenerateAddName()">
-                    </div>
-                </div>
-
-                <div class="grid grid-2" style="margin-bottom: 14px;">
-                    <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Days (દિવસો)</label>
-                        <input type="text" name="batch_days" value="Mon-Sat" required style="width: 100%;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Capacity (સીટોની સંખ્યા) *</label>
-                        <input type="number" name="capacity" value="8" min="1" max="100" required style="width: 100%;">
+                        <label for="add_end_time">End Time *</label>
+                        <input type="time" name="end_time" id="add_end_time" required value="09:00" onchange="autoGenerateAddName()">
                     </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
-                    <input type="checkbox" name="is_active" id="add_is_active" value="1" checked style="width: auto;">
-                    <label for="add_is_active" style="font-weight: 600; font-size: 13.5px; cursor: pointer; margin:0;">આ બેચ હાલમાં એક્ટિવ રાખવી (Active)</label>
+                <div class="row form-group">
+                    <div>
+                        <label for="add_batch_days">Days *</label>
+                        <input type="text" name="batch_days" id="add_batch_days" value="Mon-Sat" required>
+                    </div>
+                    <div>
+                        <label for="add_capacity">Capacity *</label>
+                        <input type="number" name="capacity" id="add_capacity" value="8" min="1" max="100" required>
+                    </div>
                 </div>
+
+                <label class="checkbox-label" for="add_is_active">
+                    <input type="checkbox" name="is_active" id="add_is_active" value="1" checked>
+                    <span>Batch is Active</span>
+                </label>
             </div>
 
             <div class="custom-modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel (રદ કરો)</button>
-                <button type="submit" class="btn">Save Batch (બેચ સાચવો)</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="btn">Save Batch</button>
             </div>
         </form>
     </div>
@@ -365,10 +340,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
 
 <!-- ==================== EDIT BATCH MODAL ==================== -->
 <div class="custom-modal-overlay" id="editBatchModal">
-    <div class="custom-modal-box">
+    <div class="custom-modal">
         <div class="custom-modal-header">
-            <h3>Edit Batch (બેચમાં સુધારો કરો)</h3>
-            <button type="button" class="custom-modal-close" onclick="closeEditModal()">&times;</button>
+            <h3>Edit Batch</h3>
+            <button type="button" class="custom-modal-close" onclick="closeEditModal()" aria-label="Close">&times;</button>
         </div>
         <form method="post" action="">
             <?= csrf_field() ?>
@@ -376,50 +351,49 @@ require_once __DIR__ . '/../includes/layout_header.php';
             <input type="hidden" name="id" id="edit_id" value="">
 
             <div class="custom-modal-body">
-                <div style="margin-bottom: 14px;">
-                    <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Batch Name (બેચનું નામ) *</label>
-                    <input type="text" name="name" id="edit_name" required style="width: 100%;">
+                <div class="form-group">
+                    <label for="edit_name">Batch Name *</label>
+                    <input type="text" name="name" id="edit_name" required>
                 </div>
 
-                <div class="grid grid-2" style="margin-bottom: 14px;">
+                <div class="row form-group">
                     <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Start Time (શરૂ થવાનો સમય) *</label>
-                        <input type="time" name="start_time" id="edit_start_time" required style="width: 100%;">
+                        <label for="edit_start_time">Start Time *</label>
+                        <input type="time" name="start_time" id="edit_start_time" required>
                     </div>
                     <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">End Time (પૂરો થવાનો સમય) *</label>
-                        <input type="time" name="end_time" id="edit_end_time" required style="width: 100%;">
-                    </div>
-                </div>
-
-                <div class="grid grid-2" style="margin-bottom: 14px;">
-                    <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Days (દિવસો)</label>
-                        <input type="text" name="batch_days" id="edit_batch_days" required style="width: 100%;">
-                    </div>
-                    <div>
-                        <label style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 5px;">Capacity (સીટોની ક્ષમતા) *</label>
-                        <input type="number" name="capacity" id="edit_capacity" min="1" max="100" required style="width: 100%;">
-                        <small class="muted" id="edit_active_note" style="display:block; margin-top:2px; font-size:11px;"></small>
+                        <label for="edit_end_time">End Time *</label>
+                        <input type="time" name="end_time" id="edit_end_time" required>
                     </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
-                    <input type="checkbox" name="is_active" id="edit_is_active" value="1" style="width: auto;">
-                    <label for="edit_is_active" style="font-weight: 600; font-size: 13.5px; cursor: pointer; margin:0;">બેચ એક્ટિવ છે (Active)</label>
+                <div class="row form-group" style="align-items: start;">
+                    <div>
+                        <label for="edit_batch_days">Days *</label>
+                        <input type="text" name="batch_days" id="edit_batch_days" required>
+                    </div>
+                    <div>
+                        <label for="edit_capacity">Capacity *</label>
+                        <input type="number" name="capacity" id="edit_capacity" min="1" max="100" required>
+                        <small class="muted" id="edit_active_note" style="display:block; margin-top:4px; font-size:11.5px;"></small>
+                    </div>
                 </div>
+
+                <label class="checkbox-label" for="edit_is_active">
+                    <input type="checkbox" name="is_active" id="edit_is_active" value="1">
+                    <span>Batch is Active</span>
+                </label>
             </div>
 
             <div class="custom-modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel (રદ કરો)</button>
-                <button type="submit" class="btn">Update Batch (સુધારો સાચવો)</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn">Update Batch</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-// Format 24-hr time to 12-hr string
 function format12Hr(timeStr) {
     if (!timeStr) return '';
     var parts = timeStr.split(':');
@@ -440,7 +414,6 @@ function autoGenerateAddName() {
     }
 }
 
-// Modal controls
 function openAddModal() {
     document.getElementById('addBatchModal').classList.add('active');
     autoGenerateAddName();
@@ -460,11 +433,11 @@ function openEditModal(batch) {
 
     var note = document.getElementById('edit_active_note');
     if (batch.active_count > 0) {
-        note.innerText = 'હાલ ' + batch.active_count + ' વિદ્યાર્થીઓ ભણે છે, ક્ષમતા તેનાથી ઓછી ન રાખી શકાય.';
-        note.style.color = '#ef4444';
+        note.innerText = batch.active_count + ' active students enrolled; capacity cannot be lower.';
+        note.style.color = '#DC2626';
     } else {
-        note.innerText = 'આ બેચમાં હાલ કોઈ વિદ્યાર્થી જોડાયેલ નથી.';
-        note.style.color = '#64748b';
+        note.innerText = 'No active students currently enrolled.';
+        note.style.color = '#64748B';
     }
 
     document.getElementById('editBatchModal').classList.add('active');
@@ -473,7 +446,6 @@ function closeEditModal() {
     document.getElementById('editBatchModal').classList.remove('active');
 }
 
-// Close modals when clicking backdrop
 window.onclick = function(event) {
     var addModal = document.getElementById('addBatchModal');
     var editModal = document.getElementById('editBatchModal');

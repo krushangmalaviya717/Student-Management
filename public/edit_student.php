@@ -23,14 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $husband_father_mobile = trim($_POST['husband_father_mobile'] ?? '');
         $home_mobile = trim($_POST['home_mobile'] ?? '');
         $address = trim($_POST['address'] ?? '');
-        
+
         $form_no = trim($_POST['form_no'] ?? '');
         $registration_no = trim($_POST['registration_no'] ?? '');
-        
+
         $entry_date = $_POST['entry_date'] ?: null;
         $final_expiry_date = $_POST['final_expiry_date'] ?: null;
         $status = $_POST['status'] ?? $student['status'];
-        
+
         $joined_batch_id = !empty($_POST['joined_batch_id']) ? (int)$_POST['joined_batch_id'] : null;
 
         if (!$name || !$student_mobile) {
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 entry_date = ?, final_expiry_date = ?, status = ?, joined_batch_id = ?,
                 updated_at = NOW()
                 WHERE id = ?";
-                
+
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             $name, $student_mobile, $husband_father_mobile, $home_mobile,
@@ -67,79 +67,70 @@ $pageTitle = 'Edit Student: ' . e($student['name']);
 require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
-<?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
-
-<div class="card" style="max-width: 800px; margin: 0 auto;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2 style="margin:0;">Edit Student Details</h2>
-        <a href="<?= url('public/student_profile.php?id=' . $id) ?>" class="btn btn-secondary">Back to Profile</a>
+<div class="card" style="max-width: 820px; margin: 0 auto;">
+    <div class="card-header-bar">
+        <div>
+            <h2>Edit Student Details</h2>
+            <small class="muted">Update personal contact information or course/batch assignment details.</small>
+        </div>
+        <a href="<?= url('public/student_profile.php?id=' . $id) ?>" class="btn btn-sm btn-secondary">Back to Profile</a>
     </div>
+
+    <?php if ($error): ?>
+        <div class="flash flash-error"><?= e($error) ?></div>
+    <?php endif; ?>
 
     <form method="post">
         <?= csrf_field() ?>
-        
-        <div class="grid grid-2" style="gap:16px;">
-            <!-- Personal Info -->
-            <div style="grid-column: span 2;">
-                <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Personal Information</h3>
-            </div>
-            
-            <div>
-                <label>Full Name *</label>
-                <input type="text" name="name" value="<?= e($student['name']) ?>" required>
-            </div>
-            
-            <div>
-                <label>Student Mobile *</label>
-                <input type="text" name="student_mobile" value="<?= e($student['student_mobile']) ?>" required>
-            </div>
-            
-            <div>
-                <label>Father/Husband Mobile</label>
-                <input type="text" name="husband_father_mobile" value="<?= e($student['husband_father_mobile']) ?>">
-            </div>
-            
-            <div>
-                <label>Home Mobile</label>
-                <input type="text" name="home_mobile" value="<?= e($student['home_mobile']) ?>">
-            </div>
-            
-            <div style="grid-column: span 2;">
-                <label>Address</label>
-                <textarea name="address" rows="2"><?= e($student['address']) ?></textarea>
-            </div>
 
-            <!-- Admission & Course Info -->
-            <div style="grid-column: span 2; margin-top:16px;">
-                <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Admission & Course Data (Careful!)</h3>
+        <div class="section-title">Personal Information</div>
+        <div class="row form-group">
+            <div>
+                <label for="edit_name">Full Name *</label>
+                <input type="text" id="edit_name" name="name" value="<?= e($student['name']) ?>" required>
             </div>
+            <div>
+                <label for="edit_mobile">Student Mobile *</label>
+                <input type="text" id="edit_mobile" name="student_mobile" value="<?= e($student['student_mobile']) ?>" required>
+            </div>
+            <div>
+                <label for="edit_guardian_mobile">Father / Husband Mobile</label>
+                <input type="text" id="edit_guardian_mobile" name="husband_father_mobile" value="<?= e($student['husband_father_mobile']) ?>">
+            </div>
+            <div>
+                <label for="edit_home_mobile">Home Mobile</label>
+                <input type="text" id="edit_home_mobile" name="home_mobile" value="<?= e($student['home_mobile']) ?>">
+            </div>
+            <div class="col-full">
+                <label for="edit_address">Address</label>
+                <textarea id="edit_address" name="address" rows="2"><?= e($student['address']) ?></textarea>
+            </div>
+        </div>
 
+        <div class="section-title">Admission &amp; Course Data</div>
+        <div class="row form-group" style="align-items: start;">
             <div>
-                <label>Form No.</label>
-                <input type="text" name="form_no" value="<?= e($student['form_no']) ?>">
+                <label for="edit_form_no">Form No.</label>
+                <input type="text" id="edit_form_no" name="form_no" value="<?= e($student['form_no']) ?>">
             </div>
-            
             <div>
-                <label>Registration No.</label>
-                <input type="text" name="registration_no" value="<?= e($student['registration_no']) ?>">
+                <label for="edit_reg_no">Registration No.</label>
+                <input type="text" id="edit_reg_no" name="registration_no" value="<?= e($student['registration_no']) ?>">
             </div>
-
             <div>
-                <label>Entry Date (First Day)</label>
-                <input type="date" name="entry_date" value="<?= e($student['entry_date']) ?>">
-                <small class="muted">Warning: Changing this affects payment due dates.</small>
+                <label for="edit_entry_date">Entry Date (First Day)</label>
+                <input type="date" id="edit_entry_date" name="entry_date" value="<?= e($student['entry_date']) ?>">
+                <small class="muted" style="display: block; margin-top: 4px; font-size: 11.5px;">Warning: Changing this affects payment due dates.</small>
             </div>
-            
             <div>
-                <label>Final Expiry Date (તાલીમનો છેલ્લો દિવસ / Last Class Day)</label>
-                <input type="date" name="final_expiry_date" value="<?= e($student['final_expiry_date']) ?>">
-                <small class="muted">વિદ્યાર્થીની તાલીમનો આ છેલ્લો દિવસ ગણાય છે. તેના પછીના દિવસે સીટ ખાલી થશે.</small>
+                <label for="edit_expiry_date">Final Expiry Date (Last Class Day)</label>
+                <input type="date" id="edit_expiry_date" name="final_expiry_date" value="<?= e($student['final_expiry_date']) ?>">
+                <small class="muted" style="display: block; margin-top: 4px; font-size: 11.5px;">The seat becomes vacant the day after this date.</small>
             </div>
-
             <div>
-                <label>Course Status</label>
-                <select name="status">
-                    <?php 
+                <label for="edit_status">Course Status</label>
+                <select id="edit_status" name="status">
+                    <?php
                     $statuses = ['draft', 'confirmed', 'waiting_ready', 'waiting_future_date', 'waiting_date_not_confirmed', 'joining_confirmed', 'active', 'extended', 'course_completed', 'cancelled'];
                     foreach ($statuses as $s) {
                         $sel = ($student['status'] === $s) ? 'selected' : '';
@@ -148,10 +139,9 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     ?>
                 </select>
             </div>
-
             <div>
-                <label>Joined Batch</label>
-                <select name="joined_batch_id">
+                <label for="edit_batch">Joined Batch</label>
+                <select id="edit_batch" name="joined_batch_id">
                     <option value="">-- No Batch --</option>
                     <?php foreach ($batches as $b): ?>
                         <option value="<?= $b['id'] ?>" <?= $student['joined_batch_id'] == $b['id'] ? 'selected' : '' ?>>
@@ -160,11 +150,11 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-
         </div>
 
-        <div style="margin-top: 24px;">
-            <button type="submit" class="btn" style="padding: 10px 24px; font-size: 15px;">Save Changes</button>
+        <div class="form-actions" style="justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+            <a href="<?= url('public/student_profile.php?id=' . $id) ?>" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn">Save Changes</button>
         </div>
     </form>
 </div>

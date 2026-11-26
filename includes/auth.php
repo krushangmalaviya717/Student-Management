@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/Session.php';
 
 /** Roles, from least to most privileged. */
 const ROLE_STAFF = 'staff';
@@ -81,7 +82,10 @@ function attempt_login(string $email, string $password): ?string
     }
 
     unset($user['password_hash']);
-    $_SESSION['user'] = $user;
+    Session::login($user);
+    // Rotate CSRF token on privilege transition / login
+    Session::remove('csrf_token');
+    Session::csrfToken();
 
     db()->prepare("UPDATE users SET last_login_at = NOW() WHERE id = ?")->execute([$user['id']]);
     log_audit('user', (int)$user['id'], 'login', null, null);
@@ -94,8 +98,7 @@ function logout(): void
     if (isset($_SESSION['user'])) {
         log_audit('user', (int)$_SESSION['user']['id'], 'logout', null, null);
     }
-    $_SESSION = [];
-    session_destroy();
+    Session::logout();
 }
 
 /**

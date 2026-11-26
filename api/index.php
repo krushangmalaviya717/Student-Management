@@ -24,6 +24,6 @@ ApiResponse::json([
     'authentication' => [
         'session' => 'Automatic via active browser login session',
         'bearer_token' => 'Header: Authorization: Bearer <API_SECRET_KEY>',
-        'query_param' => '?api_key=<API_SECRET_KEY>'
+        'api_key_header' => 'Header: X-API-Key: <API_SECRET_KEY>'
     ]
 ], 200, 'Devangi SMS API Gateway');

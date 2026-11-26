@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $action = $_POST['action'] ?? '';
         if ($action === 'add_payment') {
-            flash('error', 'પેમેન્ટ ઉમેરવા માટે ફક્ત Payments ટેબનો જ ઉપયોગ કરો.');
+            flash('error', 'Please use the Payments tab to record payments.');
             redirect('public/payments.php?student_id=' . $id);
         } elseif ($action === 'log_call') {
             log_call_and_update_state(
@@ -40,20 +40,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('You do not have permission to delete extensions.');
             }
             $extId = (int)$_POST['extension_id'];
-            
+
             $stmt = $pdo->prepare("SELECT * FROM extensions WHERE id = ? AND student_id = ?");
             $stmt->execute([$extId, $id]);
             $ext = $stmt->fetch();
             if (!$ext) throw new RuntimeException("Extension not found.");
-            
+
             $stmtInv = $pdo->prepare("SELECT id, payment_status FROM invoices WHERE extension_id = ?");
             $stmtInv->execute([$extId]);
             $invoice = $stmtInv->fetch();
-            
+
             if ($invoice && $invoice['payment_status'] === 'paid') {
-                throw new RuntimeException("આ એક્સટેન્શનનું પેમેન્ટ થઇ ગયું છે, તેથી તેને ડીલીટ કરી શકાશે નહિ.");
+                throw new RuntimeException("This extension is already paid and cannot be deleted.");
             }
-            
+
             $pdo->beginTransaction();
             if ($invoice) {
                 $pdo->prepare("DELETE FROM invoices WHERE id = ?")->execute([$invoice['id']]);
@@ -62,44 +62,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$ext['extension_days'], $id]);
             $pdo->prepare("DELETE FROM extensions WHERE id = ?")->execute([$extId]);
             $pdo->commit();
-            flash('success', 'વધારાના દિવસો (Extension) સફળતાપૂર્વક ડીલીટ કરી દેવામાં આવ્યા છે.');
+            flash('success', 'Extension deleted successfully.');
         } elseif ($action === 'change_photo') {
             if (!is_super_admin()) {
                 throw new RuntimeException('Only Super Admin is authorized to change student photos.');
             }
-            
-            $photoPath = null;
-            if (!empty($_POST['cropped_photo_data'])) {
-                $data = $_POST['cropped_photo_data'];
-                if (preg_match('/^data:image\/(png|jpeg|jpg|webp);base64,/', $data, $m)) {
-                    $ext = $m[1] === 'jpeg' ? 'jpg' : $m[1];
-                    $imageData = base64_decode(substr($data, strpos($data, ',') + 1));
-                    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-                    $filename = uniqid('photo_', true) . '.' . $ext;
-                    file_put_contents(UPLOAD_DIR . $filename, $imageData);
-                    $photoPath = UPLOAD_URL . $filename;
-                }
-            }
-            
-            if (!$photoPath && !empty($_FILES['photo']['name'])) {
-                if ($_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
-                    throw new RuntimeException('Please choose a valid photo to upload.');
-                }
-                $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
-                if (!in_array($ext, ['jpg','jpeg','png','webp'], true)) {
-                    throw new RuntimeException('Photo must be JPG, PNG, or WEBP.');
-                }
-                if ($_FILES['photo']['size'] > MAX_PHOTO_SIZE_MB * 1024 * 1024) {
-                    throw new RuntimeException('Photo must be under ' . MAX_PHOTO_SIZE_MB . 'MB.');
-                }
-                if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-                $filename = uniqid('photo_', true) . '.' . $ext;
-                if (!move_uploaded_file($_FILES['photo']['tmp_name'], UPLOAD_DIR . $filename)) {
-                    throw new RuntimeException('Could not save uploaded photo.');
-                }
-                $photoPath = UPLOAD_URL . $filename;
-            }
-            
+
+            $photoPath = save_uploaded_student_photo(
+                $_POST['cropped_photo_data'] ?? null,
+                $_FILES['photo'] ?? null,
+                UPLOAD_DIR,
+                UPLOAD_URL,
+                MAX_PHOTO_SIZE_MB
+            );
+
             if (!$photoPath) {
                 throw new RuntimeException('Photo upload failed. No valid image provided.');
             }
@@ -119,24 +95,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $readyDate = trim($_POST['ready_date'] ?? '');
             $reason = trim($_POST['reason'] ?? '');
             $res = StudentService::pauseCourse($id, $informDate, $readyDate, $reason, (int)current_user()['id']);
-            flash('success', "વિદ્યાર્થીનો કોર્સ તારીખ " . format_date($res['effective_stop_date']) . " થી મોકૂફ (Pause) કરવામાં આવ્યો છે અને {$res['banked_days']} દિવસો જમા રાખવામાં આવ્યા છે.");
+            flash('success', "Course paused effective " . format_date($res['effective_stop_date']) . ". {$res['banked_days']} remaining days banked.");
         } elseif ($action === 'resume_course') {
             $batchId = (int)($_POST['batch_id'] ?? 0);
             $restartDate = trim($_POST['restart_date'] ?? date('Y-m-d'));
             $note = trim($_POST['note'] ?? '');
             $res = StudentService::resumeCourse($id, $batchId, $restartDate, (int)current_user()['id'], $note);
-            flash('success', "વિદ્યાર્થીનો કોર્સ તારીખ " . format_date($res['restart_date']) . " થી ફરી શરૂ કરવામાં આવ્યો છે. નવી એક્સપાયરી તારીખ: " . format_date($res['new_expiry_date']) . ".");
+            flash('success', "Course resumed from " . format_date($res['restart_date']) . ". New expiry date: " . format_date($res['new_expiry_date']) . ".");
         } elseif ($action === 'update_ready_date') {
             $readyDate = trim($_POST['ready_date'] ?? '');
             $reason = trim($_POST['reason'] ?? '');
             StudentService::updateResumeReadyDate($id, $readyDate, $reason, (int)current_user()['id']);
-            flash('success', 'વિદ્યાર્થીની ફરી ક્લાસ આવવા માટેની ઉપલબ્ધ તારીખ અપડેટ થઈ ગઈ છે.');
+            flash('success', 'Resume ready date updated successfully.');
         } elseif ($action === 'mark_completed') {
             StudentService::markCourseCompleted($id, (int)current_user()['id']);
-            flash('success', 'વિદ્યાર્થીનો કોર્સ સફળતાપૂર્વક પૂર્ણ થયેલ (Course Completed / છૂટા થયેલ) તરીકે નોંધાઈ ગયો છે.');
+            flash('success', 'Student marked as Course Completed.');
         } elseif ($action === 'reopen_course') {
             StudentService::reopenCourse($id, (int)current_user()['id']);
-            flash('success', 'વિદ્યાર્થીનું સ્ટેટસ ફરીથી Active (ચાલુ) કરવામાં આવ્યું છે.');
+            flash('success', 'Student status reopened to Active.');
         }
         redirect('public/student_profile.php?id=' . $id);
     } catch (Throwable $e) {
@@ -165,47 +141,42 @@ foreach ($batches as &$b) {
 unset($b);
 $currentRate = get_current_extension_rate();
 
-// --- Calculate Pending Dues specifically for this student ---
 $pendingDuesList = [];
 if (in_array($student['status'], ['joining_confirmed', 'active', 'extended', 'course_completed'])) {
     $joiningFeeAmt = (float)get_setting('joining_fee', 3500);
     $secondPaymentAmt = (float)get_setting('second_payment_amount', 4000);
     $dueDays = (int)get_setting('second_payment_due_days', 10);
-    
-    // Group payments by stage
+
     $paidByStage = [];
     foreach ($payments as $p) {
         if ($p['status'] === 'success') {
             $paidByStage[$p['stage']] = ($paidByStage[$p['stage']] ?? 0) + $p['amount'];
         }
     }
-    
+
     $entryDate = $student['entry_date'] ?: $student['expected_joining_date'];
-    
-    // 1. Joining Fee
+
     if (!isset($paidByStage['joining_fee']) || $paidByStage['joining_fee'] < $joiningFeeAmt) {
         $pendingDuesList[] = [
             'amount' => $joiningFeeAmt - ($paidByStage['joining_fee'] ?? 0),
             'due_date' => $entryDate ? date('d-M-Y', strtotime($entryDate)) : 'N/A',
-            'label' => '1st Payment (જોઈનિંગ ફી)',
+            'label' => '1st Payment (Joining Fee)',
             'stage' => 'joining_fee'
         ];
     }
-    
-    // 2. Second Payment
+
     if ($student['entry_date']) {
         if (!isset($paidByStage['second_payment']) || $paidByStage['second_payment'] < $secondPaymentAmt) {
             $dueDate = date('d-M-Y', strtotime($student['entry_date'] . " + $dueDays days"));
             $pendingDuesList[] = [
                 'amount' => $secondPaymentAmt - ($paidByStage['second_payment'] ?? 0),
                 'due_date' => $dueDate,
-                'label' => '2nd Payment (બીજો હપ્તો)',
+                'label' => '2nd Payment (Installment)',
                 'stage' => 'second_payment'
             ];
         }
     }
-    
-    // 3. Extension Fee
+
     $stmtExt = $pdo->prepare("SELECT SUM(total_amount) as tot FROM invoices WHERE student_id = ? AND payment_status != 'paid'");
     $stmtExt->execute([$id]);
     $extTotal = (float)$stmtExt->fetchColumn();
@@ -213,7 +184,7 @@ if (in_array($student['status'], ['joining_confirmed', 'active', 'extended', 'co
         $pendingDuesList[] = [
             'amount' => $extTotal,
             'due_date' => 'Immediate',
-            'label' => 'Extension Fee (વધારાના દિવસો)',
+            'label' => 'Extension Fee',
             'stage' => 'extension_fee'
         ];
     }
@@ -223,75 +194,220 @@ $pageTitle = 'Student Profile';
 require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
-<?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
+<style>
+.profile-sidebar-card {
+    margin-bottom: 0;
+}
+@media (min-width: 961px) {
+    .profile-sidebar-card {
+        position: sticky;
+        top: 80px;
+    }
+}
+.profile-photo-img {
+    width: 100%;
+    max-height: 280px;
+    object-fit: cover;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+    display: block;
+}
+.profile-meta-list {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+}
+.profile-meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+.profile-meta-row span:first-child {
+    color: var(--muted);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.profile-meta-row span:last-child {
+    color: var(--text);
+    font-weight: 600;
+    text-align: right;
+    word-break: break-word;
+}
+.timeline-stat-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+}
+.timeline-stat-lbl {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-weight: 500;
+}
+.timeline-stat-val {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+.state-callout {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.state-callout-warning {
+    background: var(--warning-bg);
+    border-color: var(--warning-border);
+    align-items: flex-start;
+}
+.state-callout-success {
+    background: var(--success-bg);
+    border-color: var(--success-border);
+}
+.state-callout-neutral {
+    background: var(--bg);
+    border-color: var(--border);
+}
+.dues-callout {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius);
+}
+.info-callout {
+    background: var(--primary-light);
+    border-left: 3px solid var(--primary);
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 12.5px;
+    color: var(--primary-hover);
+    margin-bottom: 14px;
+}
+.crop-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.78);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1300;
+    padding: 16px;
+}
+.crop-modal {
+    background: var(--card-bg);
+    padding: 22px;
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 420px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    text-align: center;
+}
+.canvas-wrapper {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 14px auto;
+    background: #0F172A;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+.canvas-wrapper:active { cursor: grabbing; }
+.canvas-overlay-frame {
+    position: absolute;
+    top: 24px;
+    left: 52px;
+    width: 195px;
+    height: 251px;
+    border: 2px dashed var(--primary);
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.58);
+    pointer-events: none;
+    border-radius: var(--radius-sm);
+}
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 10px 0 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-body);
+}
+.zoom-controls input[type="range"] {
+    width: 170px;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+</style>
 
-<div class="grid grid-3" style="align-items: start; gap: 20px;">
-    <!-- LEFT COLUMN: Profile Info (Sticky) -->
-    <div class="card" style="grid-column:span 1; position: sticky; top: 20px; margin-bottom: 0;">
+<?php if ($error): ?>
+    <div class="flash flash-error"><?= e($error) ?></div>
+<?php endif; ?>
+
+<div class="profile-layout">
+    <!-- LEFT COLUMN: Profile Summary -->
+    <div class="card profile-sidebar-card">
         <?php if ($student['photo_path']): ?>
-            <img src="<?= e(url($student['photo_path'])) ?>" style="width:100%;border-radius:8px;margin-bottom:12px;">
+            <img src="<?= e(url($student['photo_path'])) ?>" alt="Student Photo" class="profile-photo-img">
         <?php endif; ?>
+
         <?php if (is_super_admin()): ?>
-            <details style="margin-bottom:12px; font-size:12px;">
-                <summary style="cursor:pointer; color:var(--primary); font-weight:600;">Change Photo (Super Admin)</summary>
-                <form method="post" enctype="multipart/form-data" style="margin-top:8px; background:#f8fafc; padding:8px; border-radius:6px; border:1px solid #e2e8f0;">
+            <details style="margin-bottom: 14px; font-size: 12.5px;">
+                <summary style="cursor: pointer; color: var(--primary); font-weight: 600;">Change Photo (Super Admin)</summary>
+                <form method="post" enctype="multipart/form-data" style="margin-top: 8px; background: var(--bg); padding: 10px; border-radius: var(--radius); border: 1px solid var(--border);">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="change_photo">
                     <input type="hidden" name="cropped_photo_data" id="croppedPhotoData">
-                    <input type="file" name="photo" id="photoInput" accept="image/*" style="font-size:11px; margin-bottom:6px; width:100%;">
-                    
-                    <div id="previewBox" style="display:none; width: 105px; height: 135px; border: 2px dashed #7b2d8e; border-radius: 6px; align-items: center; justify-content: center; overflow: hidden; margin: 0 auto 10px; background: #f9f9f9;">
+                    <input type="file" name="photo" id="photoInput" accept="image/*" style="font-size: 12px; padding: 5px 8px; height: auto; margin-bottom: 8px;">
+
+                    <div id="previewBox" style="display: none; width: 98px; height: 126px; border: 2px dashed var(--primary); border-radius: var(--radius); align-items: center; justify-content: center; overflow: hidden; margin: 0 auto 8px; background: #fff;">
                         <img id="previewImg" src="" alt="Cropped Preview" style="width: 100%; height: 100%; object-fit: cover;">
                     </div>
 
-                    <button type="submit" class="btn" style="font-size:11px; padding:4px 8px; width:100%; margin-top:8px;">Upload New Photo</button>
+                    <button type="submit" class="btn btn-sm btn-block">Upload New Photo</button>
                 </form>
             </details>
-            
-            <!-- Modal Popup for Canvas Image Cropping -->
-            <style>
-            .crop-modal-overlay {
-                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                background: rgba(0, 0, 0, 0.82); display: none; align-items: center; justify-content: center; z-index: 99999;
-            }
-            .crop-modal {
-                background: #fff; padding: 24px; border-radius: 12px; width: 90%; max-width: 440px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); text-align: center;
-            }
-            .canvas-wrapper {
-                position: relative; width: 300px; height: 300px; margin: 15px auto; background: #1e1e1e; overflow: hidden; border-radius: 8px; cursor: grab; user-select: none; touch-action: none;
-            }
-            .canvas-wrapper:active { cursor: grabbing; }
-            .canvas-overlay-frame {
-                position: absolute; top: 24px; left: 52px; width: 195px; height: 251px; border: 2px dashed #7b2d8e; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); pointer-events: none; border-radius: 4px;
-            }
-            .zoom-controls {
-                display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0 18px; font-size: 14px; color: #444;
-            }
-            .zoom-controls input[type="range"] { width: 160px; cursor: pointer; }
-            </style>
-            
+
+            <!-- Photo Cropper Modal -->
             <div class="crop-modal-overlay" id="cropModal">
                 <div class="crop-modal">
-                    <h3 style="margin:0 0 6px; color:#6D5CE7;">Admission Form Photo Crop</h3>
-                    <p style="font-size:13px; color:#666; margin:0 0 10px;">Adjust photo inside the 35mm x 45mm form frame.</p>
-                    
+                    <h3 style="margin: 0 0 4px; color: var(--text); font-size: 16px;">Admission Form Photo Crop</h3>
+                    <p class="muted" style="font-size: 12.5px; margin: 0 0 10px;">Adjust photo inside the 35mm x 45mm frame.</p>
+
                     <div class="canvas-wrapper" id="canvasWrapper">
                         <canvas id="cropCanvas" width="300" height="300"></canvas>
                         <div class="canvas-overlay-frame"></div>
                     </div>
-            
+
                     <div class="zoom-controls">
                         <span>Zoom:</span>
                         <input type="range" id="zoomSlider" min="0.2" max="3" step="0.05" value="1">
                     </div>
-            
-                    <div style="display:flex; justify-content:space-between; gap:10px;">
-                        <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeCropModal()">Cancel</button>
-                        <button type="button" class="btn" style="flex:1;" onclick="saveCroppedImage()">Apply Crop / ક્રોપ કરો</button>
+
+                    <div style="display: flex; justify-content: space-between; gap: 10px;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCropModal()">Cancel</button>
+                        <button type="button" class="btn" style="flex: 1;" onclick="saveCroppedImage()">Apply Crop</button>
                     </div>
                 </div>
             </div>
-            
+
             <script>
             const photoInput = document.getElementById('photoInput');
             const cropModal = document.getElementById('cropModal');
@@ -302,7 +418,7 @@ require_once __DIR__ . '/../includes/layout_header.php';
             const croppedPhotoData = document.getElementById('croppedPhotoData');
             const previewBox = document.getElementById('previewBox');
             const previewImg = document.getElementById('previewImg');
-            
+
             let img = new Image();
             let scale = 1;
             let posX = 0;
@@ -310,12 +426,12 @@ require_once __DIR__ . '/../includes/layout_header.php';
             let isDragging = false;
             let startX = 0;
             let startY = 0;
-            
+
             const FRAME_W = 195;
             const FRAME_H = 251;
             const FRAME_X = 52;
             const FRAME_Y = 24;
-            
+
             photoInput.addEventListener('change', function(e) {
                 const files = e.target.files;
                 if (files && files.length > 0) {
@@ -329,10 +445,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
                             zoomSlider.min = (minScale * 0.5).toFixed(2);
                             zoomSlider.max = (minScale * 4.0).toFixed(2);
                             zoomSlider.value = minScale;
-                            
+
                             posX = FRAME_X + (FRAME_W - img.width * scale) / 2;
                             posY = FRAME_Y + (FRAME_H - img.height * scale) / 2;
-            
+
                             cropModal.style.display = 'flex';
                             draw();
                         };
@@ -341,12 +457,12 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     reader.readAsDataURL(file);
                 }
             });
-            
+
             function draw() {
                 ctx.clearRect(0, 0, 300, 300);
                 ctx.drawImage(img, posX, posY, img.width * scale, img.height * scale);
             }
-            
+
             zoomSlider.addEventListener('input', function() {
                 const newScale = parseFloat(this.value);
                 const centerX = FRAME_X + FRAME_W / 2;
@@ -356,16 +472,16 @@ require_once __DIR__ . '/../includes/layout_header.php';
                 scale = newScale;
                 draw();
             });
-            
+
             canvasWrapper.addEventListener('mousedown', function(e) { isDragging = true; startX = e.clientX - posX; startY = e.clientY - posY; });
             window.addEventListener('mousemove', function(e) { if (isDragging) { posX = e.clientX - startX; posY = e.clientY - startY; draw(); } });
             window.addEventListener('mouseup', function() { isDragging = false; });
             canvasWrapper.addEventListener('touchstart', function(e) { if (e.touches.length === 1) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; } });
             window.addEventListener('touchmove', function(e) { if (isDragging && e.touches.length === 1) { posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; draw(); } });
             window.addEventListener('touchend', function() { isDragging = false; });
-            
+
             function closeCropModal() { cropModal.style.display = 'none'; }
-            
+
             function saveCroppedImage() {
                 const sourceX = (FRAME_X - posX) / scale;
                 const sourceY = (FRAME_Y - posY) / scale;
@@ -376,11 +492,11 @@ require_once __DIR__ . '/../includes/layout_header.php';
                 outCanvas.width = 700;
                 outCanvas.height = 900;
                 const outCtx = outCanvas.getContext('2d');
-                
+
                 outCtx.fillStyle = '#ffffff';
                 outCtx.fillRect(0, 0, 700, 900);
                 outCtx.drawImage(img, sourceX, sourceY, sourceW, sourceH, 0, 0, 700, 900);
-                
+
                 const base64Data = outCanvas.toDataURL('image/jpeg', 0.92);
                 croppedPhotoData.value = base64Data;
                 previewImg.src = base64Data;
@@ -389,101 +505,137 @@ require_once __DIR__ . '/../includes/layout_header.php';
             }
             </script>
         <?php endif; ?>
-        <div style="display:flex; justify-content:space-between; align-items:start;">
-            <h2 class="mt-0"><?= e($student['name']) ?></h2>
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px;">
+            <div>
+                <h2 style="font-size: 17px; margin: 0 0 2px;"><?= e($student['name']) ?></h2>
+                <div class="muted" style="font-size: 12.5px;">
+                    Reg: <code><?= e($student['registration_no'] ?? '-') ?></code> &middot; Form: <code><?= e($student['form_no']) ?></code>
+                </div>
+            </div>
             <a href="<?= url('public/edit_student.php?id=' . $id) ?>" class="btn btn-sm btn-secondary" title="Edit Student Details">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px; margin-right:3px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>Edit
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <span>Edit</span>
             </a>
         </div>
-        <p class="muted">Reg: <?= e($student['registration_no'] ?? '-') ?> &middot; Form: <?= e($student['form_no']) ?></p>
-        <p><span class="badge badge-purple"><?= ucwords(str_replace('_',' ',$student['status'])) ?></span></p>
-        <a href="<?= url('public/print_form.php?id=' . (int)$student['id']) ?>" target="_blank" class="btn btn-sm" style="width:100%; margin-bottom:12px; justify-content:center; display:inline-flex; align-items:center; gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>Print Official Admission Form (PDF)
+
+        <div style="margin: 10px 0 14px;">
+            <?= render_status_badge($student['status']) ?>
+        </div>
+
+        <a href="<?= url('public/print_form.php?id=' . (int)$student['id']) ?>" target="_blank" class="btn btn-sm btn-block">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Print Official Admission Form</span>
         </a>
-        <p><strong>Mobile:</strong> <?= e($student['student_mobile']) ?><br>
-           <strong>Father/Husband:</strong> <?= e($student['husband_father_mobile'] ?: '-') ?><br>
-           <strong>Home:</strong> <?= e($student['home_mobile'] ?: '-') ?><br>
-           <strong>Address:</strong> <?= e($student['address']) ?></p>
-        <p><strong>Knows Sewing:</strong> <?= $student['knows_sewing'] ? 'Yes' : 'No' ?><br>
-           <?php if ($student['previous_sewing_work']): ?><strong>Experience:</strong> <?= e($student['previous_sewing_work']) ?><br><?php endif; ?>
-           <?php if (!empty($student['hear_about_us'])): ?><strong>Source:</strong> <?= e($student['hear_about_us']) ?><?php endif; ?></p>
+
+        <div class="profile-meta-list">
+            <div class="profile-meta-row"><span>Mobile</span><span><?= e($student['student_mobile']) ?></span></div>
+            <div class="profile-meta-row"><span>Father / Husband</span><span><?= e($student['husband_father_mobile'] ?: '-') ?></span></div>
+            <div class="profile-meta-row"><span>Home Mobile</span><span><?= e($student['home_mobile'] ?: '-') ?></span></div>
+            <div class="profile-meta-row"><span>Knows Sewing</span><span><?= $student['knows_sewing'] ? 'Yes' : 'No' ?></span></div>
+            <?php if ($student['previous_sewing_work']): ?>
+                <div class="profile-meta-row"><span>Experience</span><span><?= e($student['previous_sewing_work']) ?></span></div>
+            <?php endif; ?>
+            <?php if (!empty($student['hear_about_us'])): ?>
+                <div class="profile-meta-row"><span>Source</span><span><?= e($student['hear_about_us']) ?></span></div>
+            <?php endif; ?>
+            <div style="padding-top: 6px; border-top: 1px solid var(--border-light);">
+                <div class="muted" style="font-size: 12px; margin-bottom: 2px;">Address</div>
+                <div style="color: var(--text-body); line-height: 1.45;"><?= e($student['address']) ?></div>
+            </div>
+        </div>
     </div>
 
     <!-- RIGHT COLUMN: Timeline, Payments, Calls, Extensions -->
-    <div style="grid-column:span 2; display: flex; flex-direction: column; gap: 20px;">
-        
+    <div style="display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+
+        <!-- Course Timeline Card -->
         <div class="card" style="margin-bottom: 0;">
-            <h2 class="mt-0">Course Timeline</h2>
-            <div class="grid grid-3">
-                <div><div class="muted">Entry Date</div><div><?= format_date($student['entry_date']) ?></div></div>
-                <div><div class="muted">Last Class Day (છેલ્લો દિવસ)</div><div style="font-weight:700; color:#047857;"><?= format_date($student['final_expiry_date']) ?></div></div>
-                <div><div class="muted">Expected Joining</div><div><?= format_date($student['expected_joining_date']) ?></div></div>
+            <div class="card-header-bar" style="margin-bottom: 14px;">
+                <h2>Course Timeline</h2>
             </div>
+
+            <div class="grid grid-3">
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Entry Date</div>
+                    <div class="timeline-stat-val"><?= format_date($student['entry_date']) ?></div>
+                </div>
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Last Class Day</div>
+                    <div class="timeline-stat-val" style="color: var(--success);"><?= format_date($student['final_expiry_date']) ?></div>
+                </div>
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Expected Joining</div>
+                    <div class="timeline-stat-val"><?= format_date($student['expected_joining_date']) ?></div>
+                </div>
+            </div>
+
             <?php if ($student['entry_date']): ?>
-            <div class="grid grid-3" style="margin-top:14px;">
-                <div><div class="muted">Days Completed</div><div><?= $progress['days_completed'] ?></div></div>
-                <div><div class="muted">Days Remaining</div><div><?= $progress['days_remaining'] ?></div></div>
-                <div><div class="muted">Course Status</div><div><?= ucfirst($progress['status']) ?></div></div>
+            <div class="grid grid-3" style="margin-top: 12px;">
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Days Completed</div>
+                    <div class="timeline-stat-val"><?= (int)$progress['days_completed'] ?></div>
+                </div>
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Days Remaining</div>
+                    <div class="timeline-stat-val"><?= (int)$progress['days_remaining'] ?></div>
+                </div>
+                <div class="timeline-stat-box">
+                    <div class="timeline-stat-lbl">Course Progress</div>
+                    <div class="timeline-stat-val"><?= ucfirst($progress['status']) ?></div>
+                </div>
             </div>
 
             <?php if (!empty($student['is_paused']) || $student['status'] === 'paused'): ?>
-            <!-- Paused / On Hold Banner -->
-            <div style="margin-top:16px; padding:16px 20px; background:#fffbeb; border:2px solid #fde68a; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+                <div class="state-callout state-callout-warning">
                     <div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="background:#f59e0b; color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:12px; letter-spacing:0.5px;">ON HOLD / PAUSED</span>
-                            <strong style="font-size:16px; color:#92400e;">અભ્યાસ હાલ મોકૂફ (સ્ટોપ) રાખેલ છે</strong>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span class="badge badge-amber">ON HOLD / PAUSED</span>
+                            <strong style="font-size: 14px; color: #92400E;">Course is currently paused</strong>
                         </div>
-                        <div style="margin-top:10px; font-size:13.5px; color:#78350f; line-height:1.7;">
-                            <div>&bull; <strong>મોકૂફ અમલ તારીખ:</strong> <?= format_date($student['paused_at']) ?> (જાણ કરેલ તારીખના બીજા દિવસથી)</div>
-                            <div>&bull; <strong>જમા (બાકી રહેલા) દિવસો:</strong> <span style="font-size:16px; font-weight:800; color:#b45309; background:#fef3c7; padding:1px 8px; border-radius:6px;"><?= (int)$student['paused_remaining_days'] ?> દિવસો સુરક્ષિત</span></div>
-                            <div>&bull; <strong>પાછા આવવા માટે ઉપલબ્ધ તારીખ:</strong> <?= !empty($student['resume_ready_date']) ? '<strong style="color:#065f46;">' . format_date($student['resume_ready_date']) . ' પછી</strong>' : '<span class="muted">હજુ તારીખ નક્કી નથી</span>' ?></div>
+                        <div style="margin-top: 8px; font-size: 13px; color: #78350F; line-height: 1.65;">
+                            <div>&bull; <strong>Effective Stop Date:</strong> <?= format_date($student['paused_at']) ?> (day after notice)</div>
+                            <div>&bull; <strong>Banked Remaining Days:</strong> <strong><?= (int)$student['paused_remaining_days'] ?> days preserved</strong></div>
+                            <div>&bull; <strong>Resume Ready Date:</strong> <?= !empty($student['resume_ready_date']) ? '<strong>From ' . format_date($student['resume_ready_date']) . '</strong>' : '<span class="muted">Not confirmed yet</span>' ?></div>
                             <?php if (!empty($student['pause_reason'])): ?>
-                            <div>&bull; <strong>કારણ:</strong> <?= e($student['pause_reason']) ?></div>
+                                <div>&bull; <strong>Reason:</strong> <?= e($student['pause_reason']) ?></div>
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
-                        <button type="button" class="btn btn-sm btn-success" onclick="openResumeModal()" style="background:#16a34a; border-color:#16a34a; font-weight:600; display:inline-flex; align-items:center; gap:5px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                            Resume Course (કોર્સ ફરી શરૂ કરો)
+                    <div class="action-group" style="flex-direction: column; align-items: flex-end;">
+                        <button type="button" class="btn btn-sm btn-success" onclick="openResumeModal()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <span>Resume Course</span>
                         </button>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="openReadyDateModal()" style="font-size:12px;">
-                            Edit Ready Date (તારીખ બદલો)
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="openReadyDateModal()">
+                            Edit Ready Date
                         </button>
                     </div>
                 </div>
-            </div>
 
             <?php elseif (in_array($student['status'], ['active', 'extended'])): ?>
-            <!-- Active Controls: Course Pause / Hold -->
-            <div style="margin-top:16px; padding:14px 18px; background:#fff; border:1px solid #fed7aa; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div>
-                    <strong style="color:#9a3412; font-size:14px;">Course Pause / Hold (કોર્સ સ્ટોપ કરો):</strong>
-                    <div class="muted" style="font-size:12.5px; margin-top:2px;">વિદ્યાર્થી લાંબા સમય માટે ન આવી શકે તેમ હોય તો કોર્સ સ્ટોપ કરી બાકી દિવસો જમા કરી આપો.</div>
-                </div>
-                <div>
-                    <button class="btn btn-sm" type="button" onclick="openPauseModal()" style="background:#ea580c; border-color:#ea580c; color:#fff; font-weight:600; padding:6px 14px; display:inline-flex; align-items:center; gap:5px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                        Pause Course (કોર્સ સ્ટોપ કરો)
+                <div class="state-callout state-callout-neutral">
+                    <div>
+                        <strong style="color: var(--text); font-size: 13.5px;">Course Pause / Hold</strong>
+                        <div class="muted" style="font-size: 12.5px; margin-top: 2px;">Temporarily pause this course and bank remaining days for future resumption.</div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" type="button" onclick="openPauseModal()" style="color: var(--warning-hover); border-color: var(--warning-border);">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                        <span>Pause Course</span>
                     </button>
                 </div>
-            </div>
 
             <?php elseif ($student['status'] === 'course_completed'): ?>
-            <div style="margin-top:16px; padding:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <div style="color:#16a34a; font-weight:600;">
-                    આ વિદ્યાર્થીનો કોર્સ પૂર્ણ થયેલ છે (Course Completed / છૂટા થયેલ).
+                <div class="state-callout state-callout-success">
+                    <div style="color: #166534; font-weight: 600; font-size: 13.5px;">
+                        This student has completed their course training.
+                    </div>
+                    <form method="post" onsubmit="return confirm('Reopen this student status back to Active?');" style="margin: 0;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="reopen_course">
+                        <button class="btn btn-sm btn-secondary" type="submit">Reopen Course</button>
+                    </form>
                 </div>
-                <form method="post" onsubmit="return confirm('શું તમે ખરેખર આ વિદ્યાર્થીનું સ્ટેટસ ફરીથી Active (ચાલુ) કરવા માંગો છો?');" style="margin:0;">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="reopen_course">
-                    <button class="btn btn-sm btn-secondary" style="font-size:12px;" type="submit">
-                        Reopen / ફરી ચાલુ કરો
-                    </button>
-                </form>
-            </div>
             <?php endif; ?>
             <?php endif; ?>
 
@@ -492,270 +644,324 @@ require_once __DIR__ . '/../includes/layout_header.php';
             <form method="post" class="row3">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="confirm_joining">
-                <div><label>Batch</label>
+                <div>
+                    <label>Batch</label>
                     <select name="batch_id" required>
                         <?php foreach ($queueRows as $q): ?><option value="<?= $q['batch_id'] ?>"><?= e($q['batch_name']) ?></option><?php endforeach; ?>
                     </select>
                 </div>
-                <div><label>Entry Date</label><input type="date" name="entry_date" required value="<?= date('Y-m-d') ?>"></div>
+                <div>
+                    <label>Entry Date</label>
+                    <input type="date" name="entry_date" required value="<?= date('Y-m-d') ?>">
+                </div>
                 <div class="form-actions"><button class="btn" type="submit">Confirm Joining</button></div>
             </form>
             <?php endif; ?>
 
             <?php if ($student['status'] === 'draft'): ?>
-            <p class="muted">This form is a draft. Record the ₹500 form fee below to confirm it and assign a Registration No.</p>
+            <div class="flash flash-info" style="margin: 16px 0 0;">
+                This form is a draft. Record the ₹500 form fee from the Payments page to confirm it and assign a Registration No.
+            </div>
             <?php endif; ?>
         </div>
 
-<div class="card" style="margin-bottom: 0;">
-    <h2 class="mt-0">Payments</h2>
-    
-    <?php if (!empty($pendingDuesList)): ?>
-    <div style="margin-bottom: 20px; padding: 12px; background: #fffbe8; border: 1px solid #fed7aa; border-radius: 6px;">
-        <h4 style="margin:0 0 8px 0; color: #b45309; font-size:13.5px;">Outstanding Dues (આ સ્ટુડન્ટની બાકી ફી ની વિગત):</h4>
-        <ul style="margin:0; padding-left:20px; color: #92400e; font-weight: 500; font-size:13px;">
-            <?php foreach ($pendingDuesList as $due): 
-                $isOverdue = (strtotime($due['due_date']) < time() && $due['due_date'] !== 'N/A' && $due['due_date'] !== 'Immediate');
-                $color = $isOverdue ? 'color: #dc2626; font-weight: 700;' : '';
-            ?>
-                <li>
-                    <strong><?= e($due['label']) ?></strong>: ₹<?= number_format($due['amount'], 2) ?> 
-                    <span style="<?= $color ?>">(Due Date: <?= e($due['due_date']) ?> <?= $isOverdue ? '- Overdue!' : '' ?>)</span>
-                </li>
-            <?php endforeach; ?>
-        </ul>
-    </div>
-    <?php endif; ?>
-
-    <p>
-        <?php foreach (['form_fee'=>'Form Fee','joining_fee'=>'Joining Fee','second_payment'=>'Second Payment','extension_fee'=>'Extensions'] as $k=>$label): ?>
-            <span class="badge badge-gray" style="margin-right:6px;"><?= $label ?>: ₹<?= number_format($paymentSummary[$k]['total'] ?? 0, 2) ?></span>
-        <?php endforeach; ?>
-    </p>
-    <table>
-        <tr><th>Date</th><th>Stage</th><th>Amount</th><th>Method</th><th>Receipt</th><th>Action</th></tr>
-        <?php foreach ($payments as $p): ?>
-        <tr><td><?= format_date($p['payment_date']) ?></td><td><?= ucwords(str_replace('_',' ',$p['stage'])) ?></td>
-            <td>₹<?= number_format($p['amount'],2) ?></td><td><?= ucfirst($p['method']) ?></td>
-            <td><?= e($p['receipt_no']) ?></td>
-            <td><a href="<?= url('public/receipt.php?id=' . (int)$p['id']) ?>" class="btn-link" target="_blank" style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>Receipt</a></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (!$payments): ?><tr><td colspan="6" class="muted">No payments yet.</td></tr><?php endif; ?>
-    </table>
-
-    <div style="margin-top: 18px; padding: 14px 18px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:36px; height:36px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:18px;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
-            </div>
-            <div>
-                <div style="font-weight: 700; color: #0f172a; font-size: 13.5px;">સત્તાવાર પેમેન્ટ મોડ્યુલ (Official Payments Module)</div>
-                <div class="text-muted" style="font-size: 12px; margin-top: 2px;">
-                    પેમેન્ટની સુરક્ષા અને ઓડિટ માટે નવું પેમેન્ટ ફક્ત <strong>Payments</strong> ટેબમાંથી જ સ્વીકારવામાં આવે છે.
+        <!-- Payments Card -->
+        <div class="card" style="margin-bottom: 0;">
+            <div class="card-header-bar">
+                <div>
+                    <h2>Payments</h2>
+                    <small class="muted">Fee stages collected and pending dues for this student.</small>
+                </div>
+                <div class="action-group">
+                    <?php foreach (['form_fee'=>'Form','joining_fee'=>'Joining','second_payment'=>'2nd Pay','extension_fee'=>'Extensions'] as $k=>$label): ?>
+                        <span class="badge badge-gray"><?= $label ?>: ₹<?= number_format($paymentSummary[$k]['total'] ?? 0, 0) ?></span>
+                    <?php endforeach; ?>
                 </div>
             </div>
+
+            <?php if (!empty($pendingDuesList)): ?>
+            <div class="dues-callout">
+                <div style="font-weight: 700; color: #92400E; font-size: 13px; margin-bottom: 6px;">Outstanding Dues</div>
+                <ul style="margin: 0; padding-left: 18px; color: #78350F; font-size: 13px; line-height: 1.6;">
+                    <?php foreach ($pendingDuesList as $due):
+                        $isOverdue = (strtotime($due['due_date']) < time() && $due['due_date'] !== 'N/A' && $due['due_date'] !== 'Immediate');
+                    ?>
+                        <li>
+                            <strong><?= e($due['label']) ?></strong>: ₹<?= number_format($due['amount'], 2) ?>
+                            <span style="<?= $isOverdue ? 'color: var(--danger); font-weight: 700;' : '' ?>">
+                                (Due Date: <?= e($due['due_date']) ?><?= $isOverdue ? ' - Overdue' : '' ?>)
+                            </span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Stage</th>
+                            <th>Amount</th>
+                            <th>Method</th>
+                            <th>Receipt</th>
+                            <th class="text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($payments as $p): ?>
+                        <tr>
+                            <td style="white-space: nowrap; font-variant-numeric: tabular-nums;"><?= format_date($p['payment_date']) ?></td>
+                            <td><?= ucwords(str_replace('_',' ',$p['stage'])) ?></td>
+                            <td style="font-weight: 600; font-variant-numeric: tabular-nums;">₹<?= number_format($p['amount'],2) ?></td>
+                            <td><span class="badge badge-gray"><?= strtoupper(e($p['method'])) ?></span></td>
+                            <td><code><?= e($p['receipt_no']) ?></code></td>
+                            <td class="text-right">
+                                <a href="<?= url('public/receipt.php?id=' . (int)$p['id']) ?>" class="btn btn-sm btn-secondary" target="_blank">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                    <span>Receipt</span>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$payments): ?>
+                        <tr><td colspan="6" class="muted" style="text-align: center; padding: 20px;">No payments yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="state-callout state-callout-neutral">
+                <div>
+                    <div style="font-weight: 600; color: var(--text); font-size: 13px;">Official Payments Module</div>
+                    <div class="muted" style="font-size: 12px; margin-top: 2px;">
+                        All new fee payments are processed with PIN verification in the Payments module.
+                    </div>
+                </div>
+                <a href="<?= url('public/payments.php?student_id=' . (int)$id) ?>" class="btn btn-sm">
+                    <span>Collect Payment</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+                </a>
+            </div>
         </div>
-        <a href="<?= url('public/payments.php?student_id=' . (int)$id) ?>" class="btn btn-sm" style="background: #4338ca; color: #fff; font-weight: 700; text-decoration: none; padding: 8px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            Payments પેજ પર પેમેન્ટ જમા કરો
-        </a>
+
+        <!-- Call / Follow-up Log Card -->
+        <div class="card" style="margin-bottom: 0;">
+            <div class="card-header-bar" style="margin-bottom: 14px;">
+                <h2>Call / Follow-up Log</h2>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Method</th>
+                            <th>Outcome</th>
+                            <th>Proposed Date</th>
+                            <th>Follow-up</th>
+                            <th>Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($calls as $c): ?>
+                        <tr>
+                            <td style="white-space: nowrap;"><?= format_date($c['call_datetime']) ?></td>
+                            <td><?= ucfirst($c['contact_method']) ?></td>
+                            <td><?= ucwords(str_replace('_',' ',$c['outcome'])) ?></td>
+                            <td style="white-space: nowrap;"><?= format_date($c['proposed_joining_date']) ?></td>
+                            <td style="white-space: nowrap;"><?= format_date($c['follow_up_date']) ?></td>
+                            <td><?= e($c['conversation_note']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$calls): ?>
+                        <tr><td colspan="6" class="muted" style="text-align: center; padding: 20px;">No calls logged yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if ($queueRows): ?>
+            <div class="section-title">Log New Follow-up Call</div>
+            <form method="post" class="row3">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="log_call">
+                <div>
+                    <label>Batch</label>
+                    <select name="batch_id" required>
+                        <?php foreach ($queueRows as $q): ?><option value="<?= $q['batch_id'] ?>"><?= e($q['batch_name']) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label>Contact Method</label>
+                    <select name="contact_method"><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="other">Other</option></select>
+                </div>
+                <div>
+                    <label>Outcome</label>
+                    <select name="outcome" required>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="call_later">Call Later</option>
+                        <option value="specific_date">Specific Future Date</option>
+                        <option value="cannot_join">Cannot Join</option>
+                        <option value="no_response">No Response</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Proposed Joining Date</label>
+                    <input type="date" name="proposed_joining_date">
+                </div>
+                <div>
+                    <label>Follow-up Date</label>
+                    <input type="date" name="follow_up_date">
+                </div>
+                <div class="col-full">
+                    <label>Conversation Note</label>
+                    <textarea name="conversation_note" rows="2"></textarea>
+                </div>
+                <div class="form-actions col-full"><button class="btn" type="submit">Save Call</button></div>
+            </form>
+            <?php endif; ?>
+        </div>
+
+        <!-- Extensions Card -->
+        <div class="card" style="margin-bottom: 0;">
+            <div class="card-header-bar" style="margin-bottom: 14px;">
+                <h2>Course Extensions</h2>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Days</th>
+                            <th>Old Expiry</th>
+                            <th>New Expiry</th>
+                            <th>Calculated</th>
+                            <th>Final</th>
+                            <th>Approved</th>
+                            <th>Invoice</th>
+                            <th class="text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($extensions as $ex):
+                            $stmtInv = $pdo->prepare("SELECT payment_status FROM invoices WHERE extension_id = ?");
+                            $stmtInv->execute([$ex['id']]);
+                            $invStatus = $stmtInv->fetchColumn();
+                        ?>
+                        <tr>
+                            <td><strong>+<?= (int)$ex['extension_days'] ?></strong></td>
+                            <td style="white-space: nowrap;"><?= format_date($ex['old_expiry_date']) ?></td>
+                            <td style="white-space: nowrap;"><?= format_date($ex['new_expiry_date']) ?></td>
+                            <td style="font-variant-numeric: tabular-nums;">₹<?= number_format($ex['calculated_amount'],2) ?></td>
+                            <td style="font-variant-numeric: tabular-nums;">
+                                ₹<?= number_format($ex['final_amount'],2) ?>
+                                <?= $ex['is_manual_override'] ? ' <span class="badge badge-amber">override</span>' : '' ?>
+                            </td>
+                            <td style="white-space: nowrap;"><?= format_date($ex['approved_at']) ?></td>
+                            <td>
+                                <a href="<?= url('public/invoice.php?extension_id=' . (int)$ex['id']) ?>" class="btn btn-sm btn-secondary" target="_blank">Invoice</a>
+                            </td>
+                            <td class="text-right">
+                                <?php if ($invStatus !== 'paid'): ?>
+                                    <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('Delete this extension and revert the student expiry date?');">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="delete_extension">
+                                        <input type="hidden" name="extension_id" value="<?= $ex['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-danger-ghost">Delete</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="badge badge-green">Paid</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$extensions): ?>
+                        <tr><td colspan="8" class="muted" style="text-align: center; padding: 20px;">No extensions yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if ($student['entry_date']): ?>
+            <div class="section-title">Add Extension</div>
+            <form method="post" class="row3">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="add_extension">
+                <div>
+                    <label>Extension Days *</label>
+                    <input type="number" name="extension_days" min="1" required>
+                </div>
+                <div>
+                    <label>Reason</label>
+                    <input type="text" name="reason">
+                </div>
+                <div>
+                    <label>Current Rate</label>
+                    <input type="text" disabled value="₹<?= $currentRate ? number_format($currentRate['per_day_charge'],2) : 'not set' ?>/day">
+                </div>
+                <div>
+                    <label>Manual Override Amount (optional)</label>
+                    <input type="number" step="0.01" name="override_amount">
+                </div>
+                <div class="col-full">
+                    <label>Override Reason (if amount overridden)</label>
+                    <input type="text" name="override_reason">
+                </div>
+                <div class="form-actions col-full"><button class="btn" type="submit">Add Extension &amp; Generate Invoice</button></div>
+            </form>
+            <?php else: ?>
+            <p class="muted" style="margin: 14px 0 0;">Student must have joined (Entry Date set) before an extension can be added.</p>
+            <?php endif; ?>
+        </div>
+
     </div>
 </div>
 
-<div class="card" style="margin-bottom: 0;">
-    <h2 class="mt-0">Call / Follow-up Log</h2>
-    <table>
-        <tr><th>Date</th><th>Method</th><th>Outcome</th><th>Proposed Date</th><th>Follow-up</th><th>Note</th></tr>
-        <?php foreach ($calls as $c): ?>
-        <tr><td><?= format_date($c['call_datetime']) ?></td><td><?= ucfirst($c['contact_method']) ?></td>
-            <td><?= ucwords(str_replace('_',' ',$c['outcome'])) ?></td><td><?= format_date($c['proposed_joining_date']) ?></td>
-            <td><?= format_date($c['follow_up_date']) ?></td><td><?= e($c['conversation_note']) ?></td></tr>
-        <?php endforeach; ?>
-        <?php if (!$calls): ?><tr><td colspan="6" class="muted">No calls logged yet.</td></tr><?php endif; ?>
-    </table>
-
-    <?php if ($queueRows): ?>
-    <form method="post" class="row3" style="margin-top:14px;">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="log_call">
-        <div><label>Batch</label>
-            <select name="batch_id" required>
-                <?php foreach ($queueRows as $q): ?><option value="<?= $q['batch_id'] ?>"><?= e($q['batch_name']) ?></option><?php endforeach; ?>
-            </select>
-        </div>
-        <div><label>Contact Method</label>
-            <select name="contact_method"><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="other">Other</option></select>
-        </div>
-        <div><label>Outcome</label>
-            <select name="outcome" required>
-                <option value="confirmed">Confirmed</option>
-                <option value="call_later">Call Later</option>
-                <option value="specific_date">Specific Future Date</option>
-                <option value="cannot_join">Cannot Join</option>
-                <option value="no_response">No Response</option>
-            </select>
-        </div>
-        <div><label>Proposed Joining Date</label><input type="date" name="proposed_joining_date"></div>
-        <div><label>Follow-up Date</label><input type="date" name="follow_up_date"></div>
-        <div style="grid-column:span 3;"><label>Conversation Note</label><textarea name="conversation_note" rows="2"></textarea></div>
-        <div class="form-actions" style="grid-column: 1 / -1; margin-top: 10px;"><button class="btn" type="submit">Save Call</button></div>
-    </form>
-    <?php endif; ?>
-</div>
-
-<div class="card" style="margin-bottom: 0;">
-    <h2 class="mt-0">Extensions</h2>
-    <table>
-        <tr><th>Days</th><th>Old Expiry</th><th>New Expiry</th><th>Calculated</th><th>Final</th><th>Approved</th><th>Invoice</th><th>Action</th></tr>
-        <?php foreach ($extensions as $ex): 
-            // Check if invoice is paid to determine if we can show delete button
-            $stmtInv = $pdo->prepare("SELECT payment_status FROM invoices WHERE extension_id = ?");
-            $stmtInv->execute([$ex['id']]);
-            $invStatus = $stmtInv->fetchColumn();
-        ?>
-        <tr><td><?= $ex['extension_days'] ?></td><td><?= format_date($ex['old_expiry_date']) ?></td><td><?= format_date($ex['new_expiry_date']) ?></td>
-            <td>₹<?= number_format($ex['calculated_amount'],2) ?></td><td>₹<?= number_format($ex['final_amount'],2) ?><?= $ex['is_manual_override'] ? ' <span class="badge badge-amber">override</span>' : '' ?></td>
-            <td><?= format_date($ex['approved_at']) ?></td>
-            <td><a href="<?= url('public/invoice.php?extension_id=' . (int)$ex['id']) ?>" class="btn-link" target="_blank" style="display:inline-flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>Invoice</a></td>
-            <td>
-                <?php if ($invStatus !== 'paid'): ?>
-                    <form method="post" style="display:inline;" onsubmit="return confirm('શું તમે ખરેખર આ એક્સટેન્શન ડીલીટ કરવા માંગો છો? આનાથી Expiry Date પાછી ખેંચાઈ જશે.');">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="action" value="delete_extension">
-                        <input type="hidden" name="extension_id" value="<?= $ex['id'] ?>">
-                        <button type="submit" class="btn btn-sm btn-danger" style="padding: 3px 8px; font-size: 11.5px; display:inline-flex; align-items:center; gap:3px;">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Delete
-                        </button>
-                    </form>
-                <?php else: ?>
-                    <span class="muted" style="font-size:11px;">Paid</span>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (!$extensions): ?><tr><td colspan="8" class="muted">No extensions yet.</td></tr><?php endif; ?>
-    </table>
-
-    <?php if ($student['entry_date']): ?>
-    <form method="post" class="row3" style="margin-top:14px;">
-        <?= csrf_field() ?>
-        <input type="hidden" name="action" value="add_extension">
-        <div><label>Extension Days</label><input type="number" name="extension_days" min="1" required></div>
-        <div><label>Reason</label><input type="text" name="reason"></div>
-        <div><label>Current Rate</label><input type="text" disabled value="₹<?= $currentRate ? number_format($currentRate['per_day_charge'],2) : 'not set' ?>/day"></div>
-        <div><label>Manual Override Amount (optional)</label><input type="number" step="0.01" name="override_amount"></div>
-        <div style="grid-column:span 2;"><label>Override Reason (if amount overridden)</label><input type="text" name="override_reason"></div>
-        <div class="form-actions" style="grid-column: 1 / -1; margin-top: 10px;"><button class="btn" type="submit">Add Extension &amp; Generate Invoice</button></div>
-    </form>
-    <?php else: ?>
-    <p class="muted">Student must have joined (Entry Date set) before an extension can be added.</p>
-    <?php endif; ?>
-</div>
-
-    </div> <!-- End Right Column -->
-</div> <!-- End Grid-3 -->
-
-
 <!-- ================= MODALS FOR COURSE PAUSE / RESUME ================= -->
-<style>
-.custom-modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    padding: 15px;
-}
-.custom-modal {
-    background: #fff;
-    border-radius: 12px;
-    max-width: 520px;
-    width: 100%;
-    padding: 24px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    position: relative;
-}
-.custom-modal h3 {
-    margin-top: 0;
-    margin-bottom: 12px;
-    color: var(--text);
-}
-.custom-modal .form-group {
-    margin-bottom: 14px;
-}
-.custom-modal label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
-    font-size: 13.5px;
-    color: #334155;
-}
-.custom-modal input, .custom-modal select, .custom-modal textarea {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 14px;
-    box-sizing: border-box;
-}
-.custom-modal .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-}
-.info-callout {
-    background: #eff6ff;
-    border-left: 3px solid #3b82f6;
-    padding: 10px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    color: #1e40af;
-    margin-bottom: 14px;
-}
-</style>
 
 <!-- 1. Pause Course Modal -->
 <div class="custom-modal-overlay" id="pauseModal">
     <div class="custom-modal">
-        <h3><span style="color:#ea580c;">&#10074;&#10074;</span> Course Stop / Hold (કોર્સ સ્ટોપ કરો)</h3>
-        <p class="muted" style="font-size:13px; margin-top:0;">વિદ્યાર્થી લાંબા સમય સુધી આવી શકે તેમ ન હોય ત્યારે કોર્સ હોલ્ડ પર રાખો.</p>
-
+        <div class="custom-modal-header">
+            <h3>Pause Course (Put On Hold)</h3>
+            <button type="button" class="custom-modal-close" onclick="closePauseModal()" aria-label="Close">&times;</button>
+        </div>
         <form method="post">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="pause_course">
 
-            <div class="info-callout">
-                <strong>નિયમ:</strong> જે દિવસે વિદ્યાર્થી જાણ કરે તે દિવસ ભણવામાં ગણાશે. સ્ટોપ તેના <strong>પછીના દિવસથી</strong> અમલમાં આવશે અને બાકીના દિવસો જમા રહેશે.
+            <div class="custom-modal-body">
+                <div class="info-callout">
+                    <strong>Policy:</strong> The notice date counts as attended. The pause takes effect from the <strong>following day</strong>, and remaining days are safely banked.
+                </div>
+
+                <div class="form-group">
+                    <label for="pause_inform_date">Notice Date (Inform Date) *</label>
+                    <input type="date" name="inform_date" id="pause_inform_date" value="<?= date('Y-m-d') ?>" required onchange="calculatePausePreview()">
+                </div>
+
+                <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; font-size: 13px;">
+                    <div>Effective Stop Date: <strong id="preview_stop_date" style="color: var(--warning-hover);"><?= date('Y-m-d', strtotime('+1 day')) ?></strong></div>
+                    <div>Days to be Banked: <strong id="preview_banked_days" style="color: var(--success);">Calculating...</strong></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Expected Ready Date (Optional)</label>
+                    <input type="date" name="ready_date">
+                    <small class="muted" style="display:block; margin-top: 3px;">Date from which the student expects to resume classes.</small>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Reason for Pause</label>
+                    <input type="text" name="reason" placeholder="e.g. Health issue / Family event / Out of station">
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>વિદ્યાર્થીએ જાણ કરેલ તારીખ (Inform Date):</label>
-                <input type="date" name="inform_date" id="pause_inform_date" value="<?= date('Y-m-d') ?>" required onchange="calculatePausePreview()">
-            </div>
-
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px;">
-                <div>સ્ટોપ અમલ તારીખ: <strong id="preview_stop_date" style="color:#ea580c;"><?= date('Y-m-d', strtotime('+1 day')) ?></strong></div>
-                <div>જમા થનારા બાકી દિવસો: <strong id="preview_banked_days" style="color:#16a34a; font-size:15px;">ગણતરી ચાલુ છે...</strong></div>
-            </div>
-
-            <div class="form-group">
-                <label>પાછા આવવા માટે અનુકૂળ તારીખ (Ready Date - વૈકલ્પિક):</label>
-                <input type="date" name="ready_date" placeholder="વિદ્યાર્થી આ તારીખ પછી આવી શકે તેમ છે">
-                <small class="muted">જો વિદ્યાર્થીએ જણાવ્યું હોય કે "આ તારીખ પછી હું આવી શકીશ" તો તે તારીખ અહીં નોંધો.</small>
-            </div>
-
-            <div class="form-group">
-                <label>સ્ટોપ કરવાનું કારણ (Reason):</label>
-                <input type="text" name="reason" placeholder="દા.ત. તબિયત ખરાબ / સામાજિક પ્રસંગ / બહારગામ">
-            </div>
-
-            <div class="modal-actions">
+            <div class="custom-modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closePauseModal()">Cancel</button>
-                <button type="submit" class="btn" style="background:#ea580c; border-color:#ea580c; color:#fff;">Confirm Course Stop</button>
+                <button type="submit" class="btn btn-danger">Confirm Course Pause</button>
             </div>
         </form>
     </div>
@@ -764,51 +970,54 @@ require_once __DIR__ . '/../includes/layout_header.php';
 <!-- 2. Resume Course Modal -->
 <div class="custom-modal-overlay" id="resumeModal">
     <div class="custom-modal">
-        <h3><span style="color:#16a34a;">&#9658;</span> Resume Course (કોર્સ ફરી શરૂ કરો)</h3>
-        <p class="muted" style="font-size:13px; margin-top:0;">વિદ્યાર્થીને બેચ ફાળવીને જમા રહેલા દિવસો સાથે ક્લાસ ફરી ચાલુ કરો.</p>
-
+        <div class="custom-modal-header">
+            <h3>Resume Course</h3>
+            <button type="button" class="custom-modal-close" onclick="closeResumeModal()" aria-label="Close">&times;</button>
+        </div>
         <form method="post">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="resume_course">
 
-            <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:6px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#065f46;">
-                જમા (Banked) દિવસો: <strong style="font-size:15px; color:#047857;"><?= (int)($student['paused_remaining_days'] ?? 0) ?> દિવસો</strong> ફરી ફાળવવામાં આવશે.
+            <div class="custom-modal-body">
+                <div style="background: var(--success-bg); border: 1px solid var(--success-border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #166534;">
+                    Banked Days Available: <strong><?= (int)($student['paused_remaining_days'] ?? 0) ?> days</strong> will be restored.
+                </div>
+
+                <div class="form-group">
+                    <label>Select Batch *</label>
+                    <select name="batch_id" required>
+                        <?php foreach ($batches as $b):
+                            $cap = (int)$b['capacity'];
+                            $occ = (int)($b['active_count'] ?? 0);
+                            $avail = max(0, $cap - $occ);
+                            $isCurrent = ((int)$student['joined_batch_id'] === (int)$b['id']);
+                        ?>
+                            <option value="<?= $b['id'] ?>" <?= $isCurrent ? 'selected' : '' ?>>
+                                <?= e($b['name']) ?> (<?= $occ ?>/<?= $cap ?> occupied <?= $avail > 0 ? "- {$avail} open" : "- Full" ?>) <?= $isCurrent ? '[Previous Batch]' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="resume_restart_date">Restart Date *</label>
+                    <input type="date" name="restart_date" id="resume_restart_date" value="<?= !empty($student['resume_ready_date']) && $student['resume_ready_date'] >= date('Y-m-d') ? $student['resume_ready_date'] : date('Y-m-d') ?>" required onchange="calculateResumePreview()">
+                </div>
+
+                <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; font-size: 13px;">
+                    <div>New Expiry Date: <strong id="preview_new_expiry" style="color: var(--success);">Calculating...</strong></div>
+                    <div class="muted" style="font-size: 11.5px; margin-top: 2px;">(Restart Date + <?= max(0, (int)($student['paused_remaining_days'] ?? 0) - 1) ?> days)</div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Note (Optional)</label>
+                    <input type="text" name="note" placeholder="e.g. Batch timing changed on request">
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>બેચ પસંદ કરો (Select Batch):</label>
-                <select name="batch_id" required>
-                    <?php foreach ($batches as $b): 
-                        $cap = (int)$b['capacity'];
-                        $occ = (int)($b['active_count'] ?? 0);
-                        $avail = max(0, $cap - $occ);
-                        $isCurrent = ((int)$student['joined_batch_id'] === (int)$b['id']);
-                    ?>
-                        <option value="<?= $b['id'] ?>" <?= $isCurrent ? 'selected' : '' ?>>
-                            <?= e($b['name']) ?> (<?= $occ ?>/<?= $cap ?> ભરેલ <?= $avail > 0 ? "- {$avail} જગ્યા ખાલી" : "- Full (ભરેલ)" ?>) <?= $isCurrent ? '[અગાઉની બેચ]' : '' ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>ફરી શરૂ કરવાની તારીખ (Restart Date):</label>
-                <input type="date" name="restart_date" id="resume_restart_date" value="<?= !empty($student['resume_ready_date']) && $student['resume_ready_date'] >= date('Y-m-d') ? $student['resume_ready_date'] : date('Y-m-d') ?>" required onchange="calculateResumePreview()">
-            </div>
-
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px;">
-                <div>નવી એક્સપાયરી તારીખ: <strong id="preview_new_expiry" style="color:#16a34a; font-size:14px;">ગણતરી ચાલુ છે...</strong></div>
-                <div class="muted" style="font-size:11.5px; margin-top:2px;">(Restart Date + <?= max(0, (int)($student['paused_remaining_days'] ?? 0) - 1) ?> દિવસો)</div>
-            </div>
-
-            <div class="form-group">
-                <label>ખાસ નોંધ (Note - વૈકલ્પિક):</label>
-                <input type="text" name="note" placeholder="દા.ત. સમય બદલી આપ્યો / રિકવેસ્ટ સ્વીકારી">
-            </div>
-
-            <div class="modal-actions">
+            <div class="custom-modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeResumeModal()">Cancel</button>
-                <button type="submit" class="btn btn-success" style="background:#16a34a; border-color:#16a34a;">Confirm Resume Course</button>
+                <button type="submit" class="btn btn-success">Confirm Resume Course</button>
             </div>
         </form>
     </div>
@@ -817,24 +1026,27 @@ require_once __DIR__ . '/../includes/layout_header.php';
 <!-- 3. Edit Ready Date Modal -->
 <div class="custom-modal-overlay" id="updateReadyDateModal">
     <div class="custom-modal">
-        <h3>Edit Ready Date (પાછા આવવાની તારીખ)</h3>
-        <p class="muted" style="font-size:13px; margin-top:0;">વિદ્યાર્થી જે તારીખ પછી ક્લાસ આવવા તૈયાર હોય તે તારીખ અપડેટ કરો.</p>
-
+        <div class="custom-modal-header">
+            <h3>Edit Resume Ready Date</h3>
+            <button type="button" class="custom-modal-close" onclick="closeReadyDateModal()" aria-label="Close">&times;</button>
+        </div>
         <form method="post">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="update_ready_date">
 
-            <div class="form-group">
-                <label>પાછા આવવા માટે ઉપલબ્ધ તારીખ (Ready Date):</label>
-                <input type="date" name="ready_date" value="<?= e($student['resume_ready_date'] ?? '') ?>" required>
+            <div class="custom-modal-body">
+                <div class="form-group">
+                    <label>Ready Date *</label>
+                    <input type="date" name="ready_date" value="<?= e($student['resume_ready_date'] ?? '') ?>" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Reason / Note</label>
+                    <input type="text" name="reason" value="<?= e($student['pause_reason'] ?? '') ?>" placeholder="e.g. Confirmed via phone call">
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>કારણ / નોંધ:</label>
-                <input type="text" name="reason" value="<?= e($student['pause_reason'] ?? '') ?>" placeholder="દા.ત. ફોન પર વાત થઈ તે મુજબ">
-            </div>
-
-            <div class="modal-actions">
+            <div class="custom-modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeReadyDateModal()">Cancel</button>
                 <button type="submit" class="btn">Update Date</button>
             </div>
@@ -844,27 +1056,33 @@ require_once __DIR__ . '/../includes/layout_header.php';
 
 <script>
 function openPauseModal() {
-    document.getElementById('pauseModal').style.display = 'flex';
+    document.getElementById('pauseModal').classList.add('active');
     calculatePausePreview();
 }
 function closePauseModal() {
-    document.getElementById('pauseModal').style.display = 'none';
+    document.getElementById('pauseModal').classList.remove('active');
 }
 
 function openResumeModal() {
-    document.getElementById('resumeModal').style.display = 'flex';
+    document.getElementById('resumeModal').classList.add('active');
     calculateResumePreview();
 }
 function closeResumeModal() {
-    document.getElementById('resumeModal').style.display = 'none';
+    document.getElementById('resumeModal').classList.remove('active');
 }
 
 function openReadyDateModal() {
-    document.getElementById('updateReadyDateModal').style.display = 'flex';
+    document.getElementById('updateReadyDateModal').classList.add('active');
 }
 function closeReadyDateModal() {
-    document.getElementById('updateReadyDateModal').style.display = 'none';
+    document.getElementById('updateReadyDateModal').classList.remove('active');
 }
+
+window.addEventListener('click', function(event) {
+    if (event.target === document.getElementById('pauseModal')) closePauseModal();
+    if (event.target === document.getElementById('resumeModal')) closeResumeModal();
+    if (event.target === document.getElementById('updateReadyDateModal')) closeReadyDateModal();
+});
 
 function calculatePausePreview() {
     const informInput = document.getElementById('pause_inform_date').value;
@@ -872,20 +1090,20 @@ function calculatePausePreview() {
     const informDate = new Date(informInput + 'T00:00:00');
     const stopDate = new Date(informDate);
     stopDate.setDate(stopDate.getDate() + 1);
-    
+
     const yyyy = stopDate.getFullYear();
     const mm = String(stopDate.getMonth() + 1).padStart(2, '0');
     const dd = String(stopDate.getDate()).padStart(2, '0');
     const stopStr = `${yyyy}-${mm}-${dd}`;
     document.getElementById('preview_stop_date').innerText = stopStr;
-    
+
     const expiryStr = '<?= $student['final_expiry_date'] ?: $student['base_expiry_date'] ?>';
     if (expiryStr) {
         const expDate = new Date(expiryStr + 'T00:00:00');
         const timeDiff = expDate.getTime() - stopDate.getTime();
         const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24)) + 1;
         const banked = dayDiff > 0 ? dayDiff : 0;
-        document.getElementById('preview_banked_days').innerText = banked + ' દિવસો';
+        document.getElementById('preview_banked_days').innerText = banked + ' days';
     }
 }
 

@@ -23,9 +23,11 @@ function get_setting(string $key, $default = null)
 function set_setting(string $key, string $value, ?int $userId = null): void
 {
     $stmt = db()->prepare(
-        "UPDATE settings SET setting_value = ?, updated_by = ?, updated_at = NOW() WHERE setting_key = ?"
+        "INSERT INTO settings (setting_key, setting_value, updated_by, updated_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()"
     );
-    $stmt->execute([$value, $userId, $key]);
+    $stmt->execute([$key, $value, $userId]);
 }
 
 /** Current per-day extension charge (effective today), or null if none set. */
@@ -70,10 +72,20 @@ function generate_invoice_no(): string
  */
 function generate_sequenced_number(string $settingKey, string $table, string $column): string
 {
+    $allowed = [
+        'students' => ['form_no', 'registration_no'],
+        'payments' => ['receipt_no'],
+        'invoices' => ['invoice_no'],
+    ];
+    if (!isset($allowed[$table]) || !in_array($column, $allowed[$table], true)) {
+        throw new InvalidArgumentException('Invalid sequence target.');
+    }
+
     $prefix = get_setting($settingKey, '');
     $pdo = db();
+    $lockSuffix = $pdo->inTransaction() ? ' FOR UPDATE' : '';
     $stmt = $pdo->prepare(
-        "SELECT $column FROM $table WHERE $column LIKE ? ORDER BY id DESC LIMIT 1"
+        "SELECT $column FROM $table WHERE $column LIKE ? ORDER BY id DESC LIMIT 1{$lockSuffix}"
     );
     $stmt->execute([$prefix . '%']);
     $last = $stmt->fetchColumn();
@@ -83,7 +95,17 @@ function generate_sequenced_number(string $settingKey, string $table, string $co
         $numericPart = (int) substr($last, strlen($prefix));
         $nextNumber = $numericPart + 1;
     }
-    return $prefix . str_pad((string)$nextNumber, 5, '0', STR_PAD_LEFT);
+
+    $checkStmt = $pdo->prepare("SELECT 1 FROM $table WHERE $column = ? LIMIT 1");
+    for ($attempt = 0; $attempt < 20; $attempt++) {
+        $candidate = $prefix . str_pad((string)($nextNumber + $attempt), 5, '0', STR_PAD_LEFT);
+        $checkStmt->execute([$candidate]);
+        if (!$checkStmt->fetchColumn()) {
+            return $candidate;
+        }
+    }
+
+    return $prefix . str_pad((string)($nextNumber + 20), 5, '0', STR_PAD_LEFT);
 }
 
 /** ---------------- CSRF & State (Requirement 8) ---------------- */
@@ -102,7 +124,7 @@ function verify_csrf(): void
 {
     if (!Session::verifyCsrf()) {
         http_response_code(419);
-        flash('danger', 'સેશન સમાપ્ત થઈ ગયું છે અથવા ફોર્મ અમાન્ય છે. કૃપા કરીને ફરી પ્રયાસ કરો. (Session expired)');
+        flash('danger', 'Your session expired or the form token is invalid. Please try again.');
         if (!empty($_SERVER['HTTP_REFERER'])) {
             header('Location: ' . $_SERVER['HTTP_REFERER']);
             exit;
@@ -150,4 +172,149 @@ function redirect(string $path): void
 {
     header('Location: ' . url($path));
     exit;
+}
+
+/**
+ * Render clean pagination controls preserving existing GET query parameters.
+ */
+function render_pagination(int $total, int $page, int $perPage, array $queryParams = [], string $anchor = ''): string
+{
+    $totalPages = max(1, (int)ceil($total / max(1, $perPage)));
+    if ($total <= $perPage && $page <= 1) {
+        return '';
+    }
+    $page = max(1, min($page, $totalPages));
+    $startItem = $total > 0 ? (($page - 1) * $perPage) + 1 : 0;
+    $endItem = min($total, $page * $perPage);
+
+    $buildUrl = static function (int $p) use ($queryParams, $anchor): string {
+        $params = $queryParams;
+        $params['page'] = $p;
+        return '?' . http_build_query($params) . $anchor;
+    };
+
+    $html = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-light);">';
+    $html .= '<div class="muted" style="font-size:12.5px;">Showing <strong>' . $startItem . '</strong>&ndash;<strong>' . $endItem . '</strong> of <strong>' . $total . '</strong></div>';
+    $html .= '<div class="action-group" style="gap:4px;">';
+
+    if ($page > 1) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl($page - 1)) . '" class="btn btn-sm btn-secondary">&larr; Prev</a>';
+    }
+    $fromPage = max(1, $page - 2);
+    $toPage = min($totalPages, $page + 2);
+    if ($fromPage > 1) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl(1)) . '" class="btn btn-sm btn-secondary">1</a>';
+        if ($fromPage > 2) $html .= '<span class="muted" style="padding:0 4px;">...</span>';
+    }
+    for ($i = $fromPage; $i <= $toPage; $i++) {
+        $cls = ($i === $page) ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+        $html .= '<a href="' . htmlspecialchars($buildUrl($i)) . '" class="' . $cls . '">' . $i . '</a>';
+    }
+    if ($toPage < $totalPages) {
+        if ($toPage < $totalPages - 1) $html .= '<span class="muted" style="padding:0 4px;">...</span>';
+        $html .= '<a href="' . htmlspecialchars($buildUrl($totalPages)) . '" class="btn btn-sm btn-secondary">' . $totalPages . '</a>';
+    }
+    if ($page < $totalPages) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl($page + 1)) . '" class="btn btn-sm btn-secondary">Next &rarr;</a>';
+    }
+    $html .= '</div></div>';
+    return $html;
+}
+
+/**
+ * Securely validate and save an uploaded student photo (either base64 crop or multipart file).
+ * Verifies real image binary contents, MIME type, dimensions, and byte size.
+ */
+function save_uploaded_student_photo(?string $base64Data, ?array $fileUpload, string $uploadDir, string $uploadUrl, int $maxSizeMb = 5): ?string
+{
+    $allowedMimes = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+    ];
+    $maxBytes = max(1, $maxSizeMb) * 1024 * 1024;
+    $targetDir = rtrim($uploadDir, '/\\') . DIRECTORY_SEPARATOR;
+    $targetUrl = '/' . trim($uploadUrl, '/') . '/';
+
+    if (!empty($base64Data)) {
+        if (!preg_match('/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+\/=]+)$/', trim($base64Data), $m)) {
+            throw new RuntimeException('Invalid cropped image format.');
+        }
+        $imageData = base64_decode($m[2], true);
+        if ($imageData === false || $imageData === '') {
+            throw new RuntimeException('Invalid base64 image data.');
+        }
+        if (strlen($imageData) > $maxBytes) {
+            throw new RuntimeException('Photo must be under ' . $maxSizeMb . 'MB.');
+        }
+
+        $imgInfo = @getimagesizefromstring($imageData);
+        if ($imgInfo === false || empty($imgInfo[0]) || empty($imgInfo[1]) || $imgInfo[0] > 10000 || $imgInfo[1] > 10000) {
+            throw new RuntimeException('Uploaded cropped file is not a valid image.');
+        }
+
+        $mime = $imgInfo['mime'] ?? '';
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $detected = $finfo ? finfo_buffer($finfo, $imageData) : false;
+            if ($finfo) finfo_close($finfo);
+            if ($detected !== false) {
+                $mime = $detected;
+            }
+        }
+        if (!isset($allowedMimes[$mime])) {
+            throw new RuntimeException('Photo must be a valid JPG, PNG, or WEBP image.');
+        }
+
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+        $filename = 'photo_' . bin2hex(random_bytes(16)) . '.' . $allowedMimes[$mime];
+        if (file_put_contents($targetDir . $filename, $imageData) === false) {
+            throw new RuntimeException('Could not save cropped photo.');
+        }
+        return $targetUrl . $filename;
+    }
+
+    if (!empty($fileUpload['name'])) {
+        if (($fileUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Photo upload failed. Please choose a valid image.');
+        }
+        $tmpPath = $fileUpload['tmp_name'] ?? '';
+        if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+            throw new RuntimeException('Invalid uploaded photo file.');
+        }
+        if (($fileUpload['size'] ?? 0) <= 0 || $fileUpload['size'] > $maxBytes) {
+            throw new RuntimeException('Photo must be under ' . $maxSizeMb . 'MB.');
+        }
+
+        $imgInfo = @getimagesize($tmpPath);
+        if ($imgInfo === false || empty($imgInfo[0]) || empty($imgInfo[1]) || $imgInfo[0] > 10000 || $imgInfo[1] > 10000) {
+            throw new RuntimeException('Uploaded file is not a valid image.');
+        }
+
+        $mime = $imgInfo['mime'] ?? '';
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $detected = $finfo ? finfo_file($finfo, $tmpPath) : false;
+            if ($finfo) finfo_close($finfo);
+            if ($detected !== false) {
+                $mime = $detected;
+            }
+        }
+        if (!isset($allowedMimes[$mime])) {
+            throw new RuntimeException('Photo must be a valid JPG, PNG, or WEBP image.');
+        }
+
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+        $filename = 'photo_' . bin2hex(random_bytes(16)) . '.' . $allowedMimes[$mime];
+        if (!move_uploaded_file($tmpPath, $targetDir . $filename)) {
+            throw new RuntimeException('Could not save uploaded photo.');
+        }
+        return $targetUrl . $filename;
+    }
+
+    return null;
 }

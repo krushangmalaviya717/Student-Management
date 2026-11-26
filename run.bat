@@ -1,3 +1,7 @@
 @echo off
-C:\xampp\php\php.exe start.php
+if exist "C:\xampp\php\php.exe" (
+    "C:\xampp\php\php.exe" start.php
+) else (
+    php start.php
+)
 pause

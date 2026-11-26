@@ -7,3 +7,10 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+*.sql
+!database/schema.sql
+!database/upgrade_all_columns.sql
+!database/migrations/*.sql
+.agents/
+skills-lock.json

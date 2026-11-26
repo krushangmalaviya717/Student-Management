@@ -7,20 +7,20 @@
 // Step 1: Load environment variables
 require_once __DIR__ . '/env.php';
 
-// Step 2: Database constants (for backwards-compatibility & clarity)
+// Step 2: Database constants (loaded strictly from .env without hardcoded secrets)
 define('DB_HOST', env('DB_HOST', '127.0.0.1'));
 define('DB_PORT', env('DB_PORT', '3306'));
 define('DB_NAME', env('DB_NAME', 'devangi_sms'));
 define('DB_USER', env('DB_USER', 'root'));
-define('DB_PASS', env('DB_PASS', 'Krushang@972'));
+define('DB_PASS', (string) env('DB_PASS', ''));
 define('DB_CHARSET', env('DB_CHARSET', 'utf8mb4'));
 
 // Step 3: Application settings
 define('APP_NAME', env('APP_NAME', 'Devangi Sewing Classes - Student Management'));
-define('APP_ENV', env('APP_ENV', 'local'));
-define('APP_DEBUG', (bool) env('APP_DEBUG', true));
+define('APP_ENV', env('APP_ENV', 'production'));
+define('APP_DEBUG', filter_var(env('APP_DEBUG', false), FILTER_VALIDATE_BOOLEAN));
 define('APP_TIMEZONE', env('APP_TIMEZONE', 'Asia/Kolkata'));
-define('API_SECRET_KEY', env('API_SECRET_KEY', 'devangi_secret_api_key_2026'));
+define('API_SECRET_KEY', (string) env('API_SECRET_KEY', ''));
 
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 if (!empty($_SERVER['HTTP_HOST'])) {

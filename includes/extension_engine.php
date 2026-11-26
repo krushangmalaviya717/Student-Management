@@ -16,32 +16,51 @@ require_once __DIR__ . '/course_engine.php';
  */
 function calculate_extension_line_items(string $fromExpiryDate, int $days): array
 {
+    if ($days <= 0) {
+        return ['line_items' => [], 'total' => 0.0];
+    }
+
     $pdo = db();
+    $startDate = (new DateTime($fromExpiryDate))->modify('+1 day');
+    $endDate = (new DateTime($fromExpiryDate))->modify("+{$days} days");
+    $startStr = $startDate->format('Y-m-d');
+    $endStr = $endDate->format('Y-m-d');
+
+    // Fetch all rates overlapping [startStr, endStr] in 1 range query instead of 1 query/day
+    $stmt = $pdo->prepare(
+        "SELECT id, per_day_charge, effective_from, effective_to
+         FROM extension_charge_rates
+         WHERE effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
+         ORDER BY effective_from DESC"
+    );
+    $stmt->execute([$endStr, $startStr]);
+    $rates = $stmt->fetchAll();
+
     $cursor = new DateTime($fromExpiryDate);
-    $lineItems = []; // keyed by charge_rate_id => ['rate_id','rate','days']
+    $lineItems = []; // keyed by charge_rate_id
     $total = 0.0;
 
     for ($i = 0; $i < $days; $i++) {
         $cursor->modify('+1 day');
         $dateStr = $cursor->format('Y-m-d');
 
-        $stmt = $pdo->prepare(
-            "SELECT id, per_day_charge FROM extension_charge_rates
-             WHERE effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
-             ORDER BY effective_from DESC LIMIT 1"
-        );
-        $stmt->execute([$dateStr, $dateStr]);
-        $rate = $stmt->fetch();
-        if (!$rate) {
+        $matchedRate = null;
+        foreach ($rates as $r) {
+            if ($r['effective_from'] <= $dateStr && ($r['effective_to'] === null || $r['effective_to'] >= $dateStr)) {
+                $matchedRate = $r;
+                break;
+            }
+        }
+        if (!$matchedRate) {
             throw new RuntimeException("No Per-Day Extension Charge configured for $dateStr. Set one in Settings first.");
         }
 
-        $rid = (int)$rate['id'];
+        $rid = (int)$matchedRate['id'];
         if (!isset($lineItems[$rid])) {
-            $lineItems[$rid] = ['charge_rate_id' => $rid, 'rate_per_day' => (float)$rate['per_day_charge'], 'days' => 0];
+            $lineItems[$rid] = ['charge_rate_id' => $rid, 'rate_per_day' => (float)$matchedRate['per_day_charge'], 'days' => 0];
         }
         $lineItems[$rid]['days']++;
-        $total += (float)$rate['per_day_charge'];
+        $total += (float)$matchedRate['per_day_charge'];
     }
 
     foreach ($lineItems as &$li) {

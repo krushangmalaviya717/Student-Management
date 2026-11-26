@@ -8,7 +8,7 @@ echo "=======================================================\n\n";
 
 // Step 1: Ensure Database Exists & Initialize Schema
 try {
-    $dsnNoDb = 'mysql:host=' . DB_HOST . ';charset=' . DB_CHARSET;
+    $dsnNoDb = 'mysql:host=' . DB_HOST . ';port=' . DB_PORT . ';charset=' . DB_CHARSET;
     $pdoInit = new PDO($dsnNoDb, DB_USER, DB_PASS, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
     ]);
@@ -71,4 +71,5 @@ echo "Press Ctrl+C in CMD to stop the server.\n";
 echo "=======================================================\n\n";
 
 // Start PHP Server on all interfaces (0.0.0.0) so devices on the same Wi-Fi can connect
-passthru('C:\\xampp\\php\\php.exe -S 0.0.0.0:8000');
+$phpBin = escapeshellarg(PHP_BINARY);
+passthru("{$phpBin} -S 0.0.0.0:8000");

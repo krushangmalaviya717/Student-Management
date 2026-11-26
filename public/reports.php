@@ -7,10 +7,24 @@ require_login();
 
 $pdo = db();
 $report = $_GET['report'] ?? 'active_by_batch';
-$batchId = (int)($_GET['batch_id'] ?? 0);
-$from = $_GET['from'] ?? '';
-$to = $_GET['to'] ?? '';
+$batchId = max(0, (int)($_GET['batch_id'] ?? 0));
+
+function validate_report_date(?string $val): string
+{
+    $val = trim((string)$val);
+    if ($val === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) {
+        return '';
+    }
+    $dt = DateTime::createFromFormat('Y-m-d', $val);
+    return ($dt && $dt->format('Y-m-d') === $val) ? $val : '';
+}
+
+$from = validate_report_date($_GET['from'] ?? '');
+$to = validate_report_date($_GET['to'] ?? '');
 $expiryFilter = $_GET['expiry_filter'] ?? '7_days';
+if (!in_array($expiryFilter, ['today', '7_days', '30_days', 'custom'], true)) {
+    $expiryFilter = '7_days';
+}
 $export = ($_GET['export'] ?? '') === 'csv';
 
 // Fetch all batches for filtering
@@ -34,6 +48,28 @@ $reportTitles = [
     'number_sequences' => 'Form No & Registration No Sequence Audit',
     'referrals_relatives' => 'Referral & Relative Network Report',
     'student_history' => 'Master Student History & Archive',
+];
+
+$reportCategories = [
+    'Students & Batches' => [
+        'active_by_batch' => 'Active Students',
+        'waiting_by_batch' => 'Waiting List',
+        'next_student_by_batch' => 'Next Eligible Student',
+        'student_history' => 'Master History',
+    ],
+    'Academic & Holidays' => [
+        'expiring_students' => 'Expiry Alerts',
+        'course_completion' => 'Course Completions',
+        'extensions' => 'Extensions & Billing',
+        'holiday_adjustments' => 'Holiday Adjustments',
+    ],
+    'Finance & Audits' => [
+        'payment_collections' => 'Payment Collections',
+        'pending_payments' => 'Pending 2nd Fee',
+        'form_cancellations' => 'Form Cancellations',
+        'number_sequences' => 'Number Sequences',
+        'referrals_relatives' => 'Referrals & Relatives',
+    ],
 ];
 
 $title = $reportTitles[$report] ?? 'Reports';
@@ -169,20 +205,30 @@ if ($report === 'active_by_batch') {
             FROM students s
             LEFT JOIN batches b ON b.id = s.joined_batch_id
             WHERE s.status IN ('active','extended') AND s.final_expiry_date IS NOT NULL";
-    
+    $params = [];
+
     if ($expiryFilter === 'today') {
-        $sql .= " AND s.final_expiry_date = '$today'";
+        $sql .= " AND s.final_expiry_date = ?";
+        $params[] = $today;
     } elseif ($expiryFilter === '7_days') {
         $limit7 = date('Y-m-d', strtotime('+7 days'));
-        $sql .= " AND s.final_expiry_date BETWEEN '$today' AND '$limit7'";
+        $sql .= " AND s.final_expiry_date BETWEEN ? AND ?";
+        $params[] = $today;
+        $params[] = $limit7;
     } elseif ($expiryFilter === '30_days') {
         $limit30 = date('Y-m-d', strtotime('+30 days'));
-        $sql .= " AND s.final_expiry_date BETWEEN '$today' AND '$limit30'";
+        $sql .= " AND s.final_expiry_date BETWEEN ? AND ?";
+        $params[] = $today;
+        $params[] = $limit30;
     } elseif ($from !== '' && $to !== '') {
-        $sql .= " AND s.final_expiry_date BETWEEN '$from' AND '$to'";
+        $sql .= " AND s.final_expiry_date BETWEEN ? AND ?";
+        $params[] = $from;
+        $params[] = $to;
     }
     $sql .= " ORDER BY s.final_expiry_date ASC";
-    $expiring = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $expiring = $stmt->fetchAll();
 
     $columns = ['Registration No', 'Student Name', 'Mobile', 'Batch', 'Entry Date', 'Expiry Date', 'Days Left', 'Course Status'];
     foreach ($expiring as $s) {
@@ -208,11 +254,14 @@ if ($report === 'active_by_batch') {
     $sql = "SELECT s.*, b.name AS batch_name
             FROM students s
             LEFT JOIN batches b ON b.id = s.joined_batch_id
-            WHERE s.status = 'course_completed' OR s.course_status = 'completed'";
-    if ($from !== '') { $sql .= " AND s.final_expiry_date >= '$from'"; }
-    if ($to !== '') { $sql .= " AND s.final_expiry_date <= '$to'"; }
+            WHERE (s.status = 'course_completed' OR s.course_status = 'completed')";
+    $params = [];
+    if ($from !== '') { $sql .= " AND s.final_expiry_date >= ?"; $params[] = $from; }
+    if ($to !== '') { $sql .= " AND s.final_expiry_date <= ?"; $params[] = $to; }
     $sql .= " ORDER BY s.final_expiry_date DESC";
-    $completed = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $completed = $stmt->fetchAll();
 
     $columns = ['Registration No', 'Student Name', 'Mobile', 'Batch', 'Entry Date', 'Completion Date', 'Status'];
     foreach ($completed as $s) {
@@ -240,10 +289,13 @@ if ($report === 'active_by_batch') {
             LEFT JOIN users u ON u.id = ext.approved_by
             LEFT JOIN invoices inv ON inv.extension_id = ext.id
             WHERE 1=1";
-    if ($from !== '') { $sql .= " AND ext.created_at >= '$from 00:00:00'"; }
-    if ($to !== '') { $sql .= " AND ext.created_at <= '$to 23:59:59'"; }
+    $params = [];
+    if ($from !== '') { $sql .= " AND ext.created_at >= ?"; $params[] = $from . ' 00:00:00'; }
+    if ($to !== '') { $sql .= " AND ext.created_at <= ?"; $params[] = $to . ' 23:59:59'; }
     $sql .= " ORDER BY ext.created_at DESC";
-    $exts = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $exts = $stmt->fetchAll();
 
     $columns = ['Date', 'Invoice No', 'Student Name', 'Reg No', 'Added Days', 'Old Expiry', 'New Expiry', 'Calculated (₹)', 'Final Amount (₹)', 'Override?', 'Status', 'Approved By'];
     foreach ($exts as $e) {
@@ -276,11 +328,14 @@ if ($report === 'active_by_batch') {
             JOIN batches b ON b.id = h.batch_id
             LEFT JOIN users u ON u.id = h.created_by
             WHERE 1=1";
-    if ($from !== '') { $sql .= " AND h.holiday_date >= '$from'"; }
-    if ($to !== '') { $sql .= " AND h.holiday_date <= '$to'"; }
-    if ($batchId > 0) { $sql .= " AND h.batch_id = $batchId"; }
+    $params = [];
+    if ($from !== '') { $sql .= " AND h.holiday_date >= ?"; $params[] = $from; }
+    if ($to !== '') { $sql .= " AND h.holiday_date <= ?"; $params[] = $to; }
+    if ($batchId > 0) { $sql .= " AND h.batch_id = ?"; $params[] = $batchId; }
     $sql .= " ORDER BY h.holiday_date DESC";
-    $holidays = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $holidays = $stmt->fetchAll();
 
     $columns = ['Holiday Date', 'Batch', 'Reason', 'Affected Students (+1 Day)', 'Recorded By', 'Recorded Date'];
     foreach ($holidays as $h) {
@@ -311,7 +366,7 @@ if ($report === 'active_by_batch') {
     if ($from !== '') { $sql .= " AND p.payment_date >= ?"; $params[] = $from . ' 00:00:00'; }
     if ($to !== '') { $sql .= " AND p.payment_date <= ?"; $params[] = $to . ' 23:59:59'; }
     $sql .= " ORDER BY p.payment_date DESC";
-    
+
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $payments = $stmt->fetchAll();
@@ -340,7 +395,6 @@ if ($report === 'active_by_batch') {
     }
 
 } elseif ($report === 'pending_payments') {
-    // Active students whose second payment (₹4,000) has not been recorded
     $secondFee = (float)get_setting('fee_second_payment', '4000');
     $dueDays = (int)get_setting('due_days_second_payment', '10');
 
@@ -350,9 +404,11 @@ if ($report === 'active_by_batch') {
             FROM students s
             LEFT JOIN batches b ON b.id = s.joined_batch_id
             WHERE s.status IN ('active','extended') AND s.entry_date IS NOT NULL
-            HAVING second_paid IS NULL OR second_paid < $secondFee
+            HAVING second_paid IS NULL OR second_paid < ?
             ORDER BY s.entry_date ASC";
-    $pendingList = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$secondFee]);
+    $pendingList = $stmt->fetchAll();
 
     $columns = ['Registration No', 'Student Name', 'Mobile', 'Batch', 'Entry Date', '10-Day Due Date', 'Total Paid', 'Pending Second Fee', 'Overdue Status'];
     $today = new DateTime();
@@ -496,45 +552,131 @@ if ($report === 'active_by_batch') {
     }
 }
 
+$filterableReports = [
+    'active_by_batch',
+    'waiting_by_batch',
+    'expiring_students',
+    'course_completion',
+    'extensions',
+    'holiday_adjustments',
+    'payment_collections',
+    'student_history',
+];
+$hasFilters = in_array($report, $filterableReports, true);
+$showActionsCol = ($report !== 'holiday_adjustments');
+
 $pageTitle = $reportTitles[$report] ?? 'Reports';
 require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
-<div class="card" style="margin-bottom: 20px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div>
-            <h2 class="mt-0" style="margin-bottom:4px;"><?= e($pageTitle) ?></h2>
-            <div class="muted">Operational & Financial Intelligence for Devangi Sewing Classes</div>
-        </div>
-        <div style="display:flex; gap:10px;">
-            <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'csv'])) ?>" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Export CSV
-            </a>
-            <button onclick="window.print()" class="btn" style="display:inline-flex; align-items:center; gap:6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>Print Report
-            </button>
-        </div>
-    </div>
+<style>
+.report-nav-groups {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+.report-nav-group {
+    background: var(--surface-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+}
+.report-nav-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+.report-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.report-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text-body);
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.report-pill:hover {
+    color: var(--primary);
+    border-color: var(--primary-border);
+    background: var(--primary-light);
+}
+.report-pill.active {
+    background: var(--primary);
+    color: #FFFFFF;
+    border-color: var(--primary);
+}
+@media (max-width: 1024px) {
+    .report-nav-groups {
+        grid-template-columns: 1fr;
+    }
+}
+@media print {
+    .report-directory-card,
+    .report-filter-card,
+    .report-actions-col {
+        display: none !important;
+    }
+}
+</style>
 
-    <!-- Sub-report Selector Tabs -->
-    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; border-top:1px solid #e2e8f0; padding-top:14px;">
-        <?php foreach ($reportTitles as $k => $label): ?>
-            <a href="?report=<?= $k ?>" class="btn <?= $report === $k ? '' : 'btn-secondary' ?>" style="font-size:12px; padding:6px 12px;">
-                <?= e($label) ?>
-            </a>
+<!-- Page Header -->
+<div class="page-header">
+    <div>
+        <p class="page-header-subtitle"><?= e($pageTitle) ?> &mdash; Operational and financial reporting.</p>
+    </div>
+    <div class="action-group">
+        <a href="?<?= http_build_query(array_merge($_GET, ['export' => 'csv'])) ?>" class="btn btn-secondary btn-export btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export CSV
+        </a>
+        <button type="button" onclick="window.print()" class="btn btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            Print Report
+        </button>
+    </div>
+</div>
+
+<!-- Categorized Report Directory -->
+<div class="card report-directory-card" style="padding: 16px 20px;">
+    <div class="report-nav-groups">
+        <?php foreach ($reportCategories as $catName => $items): ?>
+            <div class="report-nav-group">
+                <div class="report-nav-label"><?= e($catName) ?></div>
+                <div class="report-nav-links">
+                    <?php foreach ($items as $k => $shortLabel): ?>
+                        <a href="?report=<?= e($k) ?>" class="report-pill <?= $report === $k ? 'active' : '' ?>">
+                            <?= e($shortLabel) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         <?php endforeach; ?>
     </div>
 </div>
 
+<?php if ($hasFilters): ?>
 <!-- Filter Bar -->
-<div class="card" style="margin-bottom: 20px;">
+<div class="card report-filter-card" style="padding: 16px 20px;">
     <form method="get" class="filter-form">
         <input type="hidden" name="report" value="<?= e($report) ?>">
 
-        <?php if (in_array($report, ['active_by_batch', 'waiting_by_batch', 'holiday_adjustments'])): ?>
+        <?php if (in_array($report, ['active_by_batch', 'waiting_by_batch', 'holiday_adjustments'], true)): ?>
         <div>
-            <label style="margin-top:0;">Batch</label>
-            <select name="batch_id">
+            <label for="rep_batch">Batch</label>
+            <select id="rep_batch" name="batch_id">
                 <option value="0">All Batches</option>
                 <?php foreach ($batches as $b): ?>
                     <option value="<?= $b['id'] ?>" <?= $batchId === (int)$b['id'] ? 'selected' : '' ?>><?= e($b['name']) ?></option>
@@ -545,8 +687,8 @@ require_once __DIR__ . '/../includes/layout_header.php';
 
         <?php if ($report === 'expiring_students'): ?>
         <div>
-            <label style="margin-top:0;">Expiry Window</label>
-            <select name="expiry_filter">
+            <label for="rep_expiry">Expiry Window</label>
+            <select id="rep_expiry" name="expiry_filter">
                 <option value="today" <?= $expiryFilter === 'today' ? 'selected' : '' ?>>Expiring Today</option>
                 <option value="7_days" <?= $expiryFilter === '7_days' ? 'selected' : '' ?>>Next 7 Days</option>
                 <option value="30_days" <?= $expiryFilter === '30_days' ? 'selected' : '' ?>>Next 30 Days</option>
@@ -557,8 +699,8 @@ require_once __DIR__ . '/../includes/layout_header.php';
 
         <?php if ($report === 'payment_collections'): ?>
         <div>
-            <label style="margin-top:0;">Stage</label>
-            <select name="stage">
+            <label for="rep_stage">Stage</label>
+            <select id="rep_stage" name="stage">
                 <option value="">All Stages</option>
                 <option value="form_fee" <?= ($_GET['stage'] ?? '') === 'form_fee' ? 'selected' : '' ?>>Form Fee (₹500)</option>
                 <option value="joining_fee" <?= ($_GET['stage'] ?? '') === 'joining_fee' ? 'selected' : '' ?>>Joining Fee (₹3,500)</option>
@@ -567,8 +709,8 @@ require_once __DIR__ . '/../includes/layout_header.php';
             </select>
         </div>
         <div>
-            <label style="margin-top:0;">Payment Method</label>
-            <select name="method">
+            <label for="rep_method">Payment Method</label>
+            <select id="rep_method" name="method">
                 <option value="">All Methods</option>
                 <option value="cash" <?= ($_GET['method'] ?? '') === 'cash' ? 'selected' : '' ?>>Cash</option>
                 <option value="upi" <?= ($_GET['method'] ?? '') === 'upi' ? 'selected' : '' ?>>UPI</option>
@@ -577,21 +719,21 @@ require_once __DIR__ . '/../includes/layout_header.php';
         </div>
         <?php endif; ?>
 
-        <?php if (in_array($report, ['payment_collections', 'extensions', 'holiday_adjustments', 'course_completion', 'expiring_students'])): ?>
+        <?php if (in_array($report, ['payment_collections', 'extensions', 'holiday_adjustments', 'course_completion', 'expiring_students'], true)): ?>
         <div>
-            <label style="margin-top:0;">From Date</label>
-            <input type="date" name="from" value="<?= e($from) ?>">
+            <label for="rep_from">From Date</label>
+            <input type="date" id="rep_from" name="from" value="<?= e($from) ?>">
         </div>
         <div>
-            <label style="margin-top:0;">To Date</label>
-            <input type="date" name="to" value="<?= e($to) ?>">
+            <label for="rep_to">To Date</label>
+            <input type="date" id="rep_to" name="to" value="<?= e($to) ?>">
         </div>
         <?php endif; ?>
 
         <?php if ($report === 'student_history'): ?>
-        <div>
-            <label style="margin-top:0;">Search Keyword</label>
-            <input type="text" name="q" value="<?= e($_GET['q'] ?? '') ?>" placeholder="Name, Mobile, Reg or Form No...">
+        <div style="flex: 2 1 260px;">
+            <label for="rep_q">Search Keyword</label>
+            <input type="text" id="rep_q" name="q" value="<?= e($_GET['q'] ?? '') ?>" placeholder="Name, mobile, registration no, or form no...">
         </div>
         <?php endif; ?>
 
@@ -601,60 +743,73 @@ require_once __DIR__ . '/../includes/layout_header.php';
         </div>
     </form>
 </div>
+<?php endif; ?>
 
 <!-- Report Results -->
 <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 class="mt-0" style="margin-bottom:0;">
-            Report Records: <span class="badge badge-purple"><?= count($rows) ?> entries</span>
+    <div class="card-header-bar">
+        <div>
+            <h2><?= e($pageTitle) ?></h2>
+        </div>
+        <div class="action-group">
+            <span class="badge badge-purple"><?= count($rows) ?> entr<?= count($rows) === 1 ? 'y' : 'ies' ?></span>
             <?php if ($report === 'payment_collections' && isset($totalAmount)): ?>
-                &nbsp;|&nbsp; Total Revenue: <span class="badge badge-green" style="font-size:14px;">₹<?= number_format($totalAmount, 2) ?></span>
+                <span class="badge badge-green">Total Revenue: ₹<?= number_format($totalAmount, 2) ?></span>
             <?php endif; ?>
-        </h3>
+        </div>
     </div>
 
-    <div style="overflow-x:auto;">
+    <div class="table-wrap">
         <table>
             <thead>
                 <tr>
                     <?php foreach ($columns as $c): ?>
                         <th><?= e($c) ?></th>
                     <?php endforeach; ?>
-                    <th>Actions</th>
+                    <?php if ($showActionsCol): ?>
+                        <th class="text-right report-actions-col">Actions</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($rows as $row): ?>
-                <tr>
-                    <?php 
-                    $studentId = $row['student_id'] ?? null;
-                    $paymentId = $row['payment_id'] ?? null;
-                    $invoiceId = $row['invoice_id'] ?? null;
-                    $cellCount = count($columns);
-                    for ($idx = 0; $idx < $cellCount; $idx++): 
-                    ?>
-                        <td><?= e($row[$idx] ?? '-') ?></td>
-                    <?php endfor; ?>
-                    <td>
-                        <?php if ($studentId): ?>
-                            <a href="/student-management/public/student_profile.php?id=<?= $studentId ?>" class="btn-link" style="font-size:12px;">Profile</a>
-                        <?php endif; ?>
-                        <?php if ($paymentId): ?>
-                            &middot; <a href="/student-management/public/receipt.php?id=<?= $paymentId ?>" class="btn-link" style="font-size:12px;" target="_blank">Receipt</a>
-                        <?php endif; ?>
-                        <?php if ($invoiceId): ?>
-                            &middot; <a href="/student-management/public/invoice.php?id=<?= $invoiceId ?>" class="btn-link" style="font-size:12px;" target="_blank">Invoice</a>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-
                 <?php if (!$rows): ?>
-                <tr>
-                    <td colspan="<?= count($columns) + 1 ?>" class="muted" style="text-align:center; padding:24px;">
-                        No records match the selected filter criteria.
-                    </td>
-                </tr>
+                    <tr>
+                        <td colspan="<?= count($columns) + ($showActionsCol ? 1 : 0) ?>" class="muted" style="text-align: center; padding: 36px 20px;">
+                            No records match the selected filter criteria.
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($rows as $row): ?>
+                        <?php
+                        $studentId = $row['student_id'] ?? null;
+                        $paymentId = $row['payment_id'] ?? null;
+                        $invoiceId = $row['invoice_id'] ?? null;
+                        $cellCount = count($columns);
+                        ?>
+                        <tr>
+                            <?php for ($idx = 0; $idx < $cellCount; $idx++): ?>
+                                <td><?= e($row[$idx] ?? '-') ?></td>
+                            <?php endfor; ?>
+                            <?php if ($showActionsCol): ?>
+                                <td class="text-right report-actions-col" style="white-space: nowrap;">
+                                    <div class="action-group" style="gap: 6px;">
+                                        <?php if ($studentId): ?>
+                                            <a href="<?= url('public/student_profile.php?id=' . (int)$studentId) ?>" class="btn btn-sm btn-secondary">Profile</a>
+                                        <?php endif; ?>
+                                        <?php if ($paymentId): ?>
+                                            <a href="<?= url('public/receipt.php?id=' . (int)$paymentId) ?>" class="btn btn-sm btn-secondary" target="_blank">Receipt</a>
+                                        <?php endif; ?>
+                                        <?php if ($invoiceId): ?>
+                                            <a href="<?= url('public/invoice.php?id=' . (int)$invoiceId) ?>" class="btn btn-sm btn-secondary" target="_blank">Invoice</a>
+                                        <?php endif; ?>
+                                        <?php if (!$studentId && !$paymentId && !$invoiceId): ?>
+                                            <span class="muted">&mdash;</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>

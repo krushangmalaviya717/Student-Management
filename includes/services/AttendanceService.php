@@ -25,7 +25,7 @@ class AttendanceService
             return [
                 'is_holiday' => true,
                 'type' => 'declared_holiday',
-                'reason' => $row['reason'] ?: 'જાહેર રજા (Institute Holiday)'
+                'reason' => $row['reason'] ?: 'Institute Holiday'
             ];
         }
 
@@ -34,7 +34,7 @@ class AttendanceService
             return [
                 'is_holiday' => true,
                 'type' => 'sunday',
-                'reason' => 'રવિવાર (Sunday Weekly Off)'
+                'reason' => 'Sunday Weekly Off'
             ];
         }
 
@@ -80,7 +80,7 @@ class AttendanceService
         }
 
         foreach ($staffList as &$st) {
-            $st['batches_str'] = !empty($batchMap[$st['id']]) ? implode(', ', $batchMap[$st['id']]) : 'કોઈ બેચ નથી';
+            $st['batches_str'] = !empty($batchMap[$st['id']]) ? implode(', ', $batchMap[$st['id']]) : 'No batches assigned';
             if (isset($attMap[$st['id']])) {
                 $st['attendance'] = $attMap[$st['id']];
                 $st['is_marked'] = true;
@@ -217,7 +217,7 @@ class AttendanceService
         $hStmt->execute([$startDate, $endDate]);
         $declaredHolidays = [];
         foreach ($hStmt->fetchAll() as $h) {
-            $declaredHolidays[$h['holiday_date']] = $h['reason'] ?: 'જાહેર રજા';
+            $declaredHolidays[$h['holiday_date']] = $h['reason'] ?: 'Institute Holiday';
         }
 
         // Build calendar days metadata
@@ -338,7 +338,7 @@ class AttendanceService
                         $record = [
                             'status' => 'unmarked',
                             'half_day_session' => null,
-                            'notes' => 'હાજરી પુરાયેલ નથી',
+                            'notes' => 'Attendance not marked',
                             'is_marked' => false
                         ];
                     }

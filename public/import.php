@@ -85,10 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             $error = 'Unable to read uploaded file.';
         } else {
             $header = fgetcsv($handle);
-            // Normalize headers
-            $header = array_map(function($h) { return strtolower(trim(str_replace([' ', '-'], '_', $h))); }, $header);
+            if (!is_array($header) || empty($header)) {
+                $error = 'Invalid or empty CSV file.';
+            } else {
+            $header = array_map(function ($h) { return strtolower(trim(str_replace([' ', '-'], '_', (string)$h))); }, $header);
 
-            $batches = $pdo->query("SELECT id, name FROM batches")->fetchAll();
+            $batches = $pdo->query("SELECT id, name, start_time FROM batches ORDER BY start_time ASC")->fetchAll();
             $batchList = [];
             foreach ($batches as $b) {
                 $batchList[strtolower(trim($b['name']))] = (int)$b['id'];
@@ -104,14 +106,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
             try {
                 while (($row = fgetcsv($handle)) !== false) {
                     $rowNum++;
-                    if (empty(array_filter($row))) continue; // skip blank rows
+                    if (empty(array_filter($row))) continue;
 
-                    $data = array_combine($header, $row);
-                    if (!$data) {
+                    if (!is_array($row) || count($row) !== count($header)) {
                         $skippedCount++;
-                        $errors[] = "Row #$rowNum: Column count mismatch.";
+                        $errors[] = "Row #$rowNum: Column count mismatch (expected " . count($header) . ', found ' . count((array)$row) . ').';
                         continue;
                     }
+                    $data = array_combine($header, $row);
 
                     $name = trim($data['name'] ?? '');
                     $mobile = trim($data['student_mobile'] ?? '');
@@ -127,7 +129,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
                     $regNo = trim($data['registration_no'] ?? '') ?: null;
 
-                    // Check duplicate form or reg no
                     $dupStmt = $pdo->prepare("SELECT id FROM students WHERE form_no = ? OR (registration_no IS NOT NULL AND registration_no = ?)");
                     $dupStmt->execute([$formNo, $regNo]);
                     if ($dupStmt->fetch()) {
@@ -136,25 +137,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         continue;
                     }
 
-                    // Match batch
                     $batchStr = strtolower(trim($data['batch_id_or_time'] ?? ''));
                     $batchId = null;
-                    if (isset($batchList[$batchStr])) {
-                        $batchId = $batchList[$batchStr];
-                    } else {
-                        // fuzzy match batch
-                        foreach ($batchList as $bName => $bId) {
-                            if (str_contains($batchStr, '10') || str_contains($batchStr, '10:00')) { $batchId = 1; break; }
-                            if (str_contains($batchStr, '1') || str_contains($batchStr, '1:00')) { $batchId = 2; break; }
-                            if (str_contains($batchStr, '3') || str_contains($batchStr, '3:00')) { $batchId = 3; break; }
-                            if (str_contains($batchStr, '5') || str_contains($batchStr, '5:00')) { $batchId = 4; break; }
+                    if ($batchStr !== '') {
+                        if (isset($batchList[$batchStr])) {
+                            $batchId = $batchList[$batchStr];
+                        } else {
+                            foreach ($batches as $b) {
+                                $bNameNorm = strtolower(trim($b['name']));
+                                $start12 = !empty($b['start_time']) ? strtolower(date('g:i', strtotime($b['start_time']))) : '';
+                                $startHour = !empty($b['start_time']) ? strtolower(date('g', strtotime($b['start_time']))) : '';
+                                if (str_contains($batchStr, $bNameNorm) || ($start12 !== '' && str_contains($batchStr, $start12)) || ($startHour !== '' && preg_match('/\b' . preg_quote($startHour, '/') . '(?::\d{2})?\b/', $batchStr))) {
+                                    $batchId = (int)$b['id'];
+                                    break;
+                                }
+                            }
                         }
                     }
 
                     $entryDate = trim($data['entry_date'] ?? '') ?: null;
                     $expiryDate = trim($data['expiry_date'] ?? '') ?: null;
                     $status = trim($data['status'] ?? 'active');
-                    $validStatuses = ['draft','confirmed','waiting_ready','active','extended','course_completed','cancelled','inactive'];
+                    $validStatuses = ['draft', 'confirmed', 'waiting_ready', 'active', 'extended', 'course_completed', 'cancelled', 'inactive'];
                     if (!in_array($status, $validStatuses)) {
                         $status = 'active';
                     }
@@ -169,9 +173,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                          VALUES
                             (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())"
                     );
-                    $formStatus = ($regNo || in_array($status, ['active','extended','course_completed'])) ? 'confirmed' : 'draft';
+                    $formStatus = ($regNo || in_array($status, ['active', 'extended', 'course_completed'])) ? 'confirmed' : 'draft';
                     $confirmedAt = $formStatus === 'confirmed' ? ($entryDate ?: date('Y-m-d H:i:s')) : null;
-                    $courseStatus = in_array($status, ['active','extended','course_completed']) ? ($status === 'extended' ? 'extended' : ($status === 'course_completed' ? 'completed' : 'active')) : 'not_started';
+                    $courseStatus = in_array($status, ['active', 'extended', 'course_completed']) ? ($status === 'extended' ? 'extended' : ($status === 'course_completed' ? 'completed' : 'active')) : 'not_started';
 
                     $stmt->execute([
                         $formNo,
@@ -197,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     ]);
                     $newStudentId = (int)$pdo->lastInsertId();
 
-                    // Insert Referral if provided
                     $relName = trim($data['relative_name'] ?? '');
                     if ($relName !== '') {
                         $pdo->prepare(
@@ -224,10 +227,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     'skipped' => $skippedCount,
                     'errors' => $errors
                 ];
-                flash('success', "Import completed successfully! $importedCount records imported, $skippedCount skipped.");
+                flash('success', "Import completed successfully! {$importedCount} records imported, {$skippedCount} skipped.");
             } catch (Throwable $e) {
                 $pdo->rollBack();
-                $error = 'Import failed: ' . $e->getMessage();
+                error_log('[CSV Import Error] ' . $e->getMessage());
+                $error = 'Import failed due to invalid data or duplicate records. Please check your CSV file and try again.';
+            }
             }
             fclose($handle);
         }
@@ -238,17 +243,37 @@ $pageTitle = 'Historical Data Migration (CSV Import)';
 require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
-<div class="card" style="margin-bottom:20px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div>
-            <h2 class="mt-0" style="margin-bottom:4px;">Historical Student Data Importer</h2>
-            <div class="muted">One-time migration tool to bulk-import older student registers. All imported rows are flagged as <code>is_imported = 1</code>.</div>
-        </div>
-        <div>
-            <a href="?sample=1" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Download Sample CSV Template
-            </a>
-        </div>
+<style>
+.file-drop-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px dashed var(--border-input);
+    border-radius: var(--radius);
+    background: var(--surface-subtle);
+    font-size: 13.5px;
+    cursor: pointer;
+}
+.import-error-box {
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-border);
+    color: #991B1B;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-top: 12px;
+}
+</style>
+
+<!-- Page Header -->
+<div class="page-header">
+    <div>
+        <p class="page-header-subtitle">Bulk-import historical student registers via CSV. Imported records are flagged with <code>is_imported = 1</code>.</p>
+    </div>
+    <div class="action-group">
+        <a href="?sample=1" class="btn btn-secondary btn-export btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download Sample CSV Template
+        </a>
     </div>
 </div>
 
@@ -257,17 +282,19 @@ require_once __DIR__ . '/../includes/layout_header.php';
 <?php endif; ?>
 
 <?php if ($results): ?>
-    <div class="card" style="margin-bottom:20px;">
-        <h3 class="mt-0" style="display:flex; align-items:center; gap:8px;">
-            Import Summary
-            <span class="badge badge-green">Success</span>
-        </h3>
-        <p><strong>Successfully Imported:</strong> <?= (int)$results['imported'] ?> student records</p>
-        <p><strong>Skipped / Failed:</strong> <?= (int)$results['skipped'] ?> records</p>
+    <div class="card">
+        <div class="card-header-bar">
+            <h2>Import Summary</h2>
+            <span class="badge badge-green">Completed</span>
+        </div>
+        <div style="display: flex; gap: 24px; flex-wrap: wrap; font-size: 13.5px;">
+            <div><strong>Successfully Imported:</strong> <?= (int)$results['imported'] ?> student record<?= (int)$results['imported'] === 1 ? '' : 's' ?></div>
+            <div><strong>Skipped / Failed:</strong> <?= (int)$results['skipped'] ?> record<?= (int)$results['skipped'] === 1 ? '' : 's' ?></div>
+        </div>
         <?php if ($results['errors']): ?>
-            <div style="background:#fef2f2; border:1px solid #fecaca; padding:12px; border-radius:6px; font-size:13px;">
+            <div class="import-error-box">
                 <strong>Error Details:</strong>
-                <ul style="margin:6px 0 0 20px; padding:0;">
+                <ul style="margin: 6px 0 0 20px; padding: 0;">
                     <?php foreach ($results['errors'] as $err): ?>
                         <li><?= e($err) ?></li>
                     <?php endforeach; ?>
@@ -277,20 +304,27 @@ require_once __DIR__ . '/../includes/layout_header.php';
     </div>
 <?php endif; ?>
 
-<div class="card" style="max-width:750px;">
-    <h3 class="mt-0">Upload CSV File</h3>
-    <p class="muted">Please ensure your CSV matches the column header format of the template. Duplicate form or registration numbers will be automatically detected and skipped.</p>
+<div class="card">
+    <div class="card-header-bar">
+        <div>
+            <h2>Upload CSV File</h2>
+            <p class="muted" style="margin: 2px 0 0; font-size: 12.5px;">Ensure columns match the sample template header format. Duplicate Form No or Registration No values are automatically skipped.</p>
+        </div>
+    </div>
 
     <form method="post" enctype="multipart/form-data">
         <?= csrf_field() ?>
-        <div style="margin-bottom:16px;">
-            <label>Select CSV File (.csv)</label>
-            <input type="file" name="csv_file" accept=".csv" required style="padding:10px; border:1px solid #cbd5e1; width:100%; border-radius:6px; background:#f8fafc;">
+        <div class="form-group">
+            <label for="import_csv_file">Select CSV File (.csv) *</label>
+            <input type="file" id="import_csv_file" name="csv_file" accept=".csv" required class="file-drop-input">
         </div>
 
-        <button type="submit" class="btn" style="padding:10px 20px; font-size:14px; display:inline-flex; align-items:center; gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>Start Migration Import
-        </button>
+        <div class="form-actions">
+            <button type="submit" class="btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Start Migration Import
+            </button>
+        </div>
     </form>
 </div>
 

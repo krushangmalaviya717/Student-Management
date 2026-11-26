@@ -10,16 +10,75 @@ require_once __DIR__ . '/ExportService.php';
 
 class StudentService
 {
+    private static function buildStudentFilterWhere(array $filters, array &$params): string
+    {
+        $q = trim($filters['q'] ?? '');
+        $status = $filters['status'] ?? 'active_students';
+        $batchId = $filters['batch_id'] ?? '';
+        $where = ' WHERE 1=1';
+
+        if ($q !== '') {
+            $where .= " AND (s.name LIKE ? OR s.student_mobile LIKE ? OR s.registration_no LIKE ? OR s.form_no LIKE ?)";
+            $like = "%$q%";
+            array_push($params, $like, $like, $like, $like);
+        }
+
+        if ($status === 'active_students' || $status === '') {
+            $where .= " AND (s.status IN ('active', 'extended') OR s.course_status IN ('active', 'extended')) AND s.is_paused = 0 AND s.status != 'paused' AND s.is_temporary = 0";
+        } elseif ($status === 'temporary') {
+            $where .= " AND s.is_temporary = 1";
+        } elseif ($status === 'paused') {
+            $where .= " AND (s.is_paused = 1 OR s.status = 'paused') AND s.is_temporary = 0";
+        } elseif ($status === 'active') {
+            $where .= " AND s.status = 'active' AND s.is_paused = 0 AND s.is_temporary = 0";
+        } elseif ($status === 'extended') {
+            $where .= " AND s.status = 'extended' AND s.is_paused = 0 AND s.is_temporary = 0";
+        } elseif ($status === 'course_completed') {
+            $where .= " AND s.status = 'course_completed' AND s.is_temporary = 0";
+        } elseif ($status === 'waiting') {
+            $where .= " AND s.status LIKE 'waiting%' AND s.is_temporary = 0";
+        } elseif ($status === 'all') {
+            // No status filter
+        } else {
+            $where .= " AND s.status = ?";
+            $params[] = $status;
+        }
+
+        if ($batchId !== '' && $batchId !== null) {
+            if ($status === 'all') {
+                $where .= " AND COALESCE(s.joined_batch_id, s.preferred_batch_id) = ?";
+            } else {
+                $where .= " AND s.joined_batch_id = ?";
+            }
+            $params[] = (int)$batchId;
+        }
+
+        return $where;
+    }
+
+    /**
+     * Count total matching students for pagination
+     */
+    public static function countStudents(array $filters = []): int
+    {
+        $pdo = db();
+        $params = [];
+        $where = self::buildStudentFilterWhere($filters, $params);
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM students s" . $where);
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
     /**
      * Fetch filtered student list
      */
     public static function getStudents(array $filters = []): array
     {
         $pdo = db();
-        $q = trim($filters['q'] ?? '');
-        $status = $filters['status'] ?? 'active_students';
-        $batchId = $filters['batch_id'] ?? '';
-        $limit = (int)($filters['limit'] ?? 200);
+        $limit = max(1, (int)($filters['limit'] ?? 200));
+        $offset = max(0, (int)($filters['offset'] ?? 0));
+        $params = [];
+        $where = self::buildStudentFilterWhere($filters, $params);
 
         $sql = "SELECT s.*, 
                        jb.name AS joined_batch_name, 
@@ -27,45 +86,9 @@ class StudentService
                        COALESCE(jb.name, pb.name) AS batch_name 
                 FROM students s
                 LEFT JOIN batches jb ON jb.id = s.joined_batch_id
-                LEFT JOIN batches pb ON pb.id = s.preferred_batch_id
-                WHERE 1=1";
-        $params = [];
-
-        if ($q !== '') {
-            $sql .= " AND (s.name LIKE ? OR s.student_mobile LIKE ? OR s.registration_no LIKE ? OR s.form_no LIKE ?)";
-            $like = "%$q%";
-            array_push($params, $like, $like, $like, $like);
-        }
-
-        if ($status === 'active_students' || $status === '') {
-            $sql .= " AND (s.status IN ('active', 'extended') OR s.course_status IN ('active', 'extended')) AND s.is_paused = 0 AND s.status != 'paused'";
-        } elseif ($status === 'paused') {
-            $sql .= " AND (s.is_paused = 1 OR s.status = 'paused')";
-        } elseif ($status === 'active') {
-            $sql .= " AND s.status = 'active' AND s.is_paused = 0";
-        } elseif ($status === 'extended') {
-            $sql .= " AND s.status = 'extended' AND s.is_paused = 0";
-        } elseif ($status === 'course_completed') {
-            $sql .= " AND s.status = 'course_completed'";
-        } elseif ($status === 'waiting') {
-            $sql .= " AND s.status LIKE 'waiting%'";
-        } elseif ($status === 'all') {
-            // No status filter
-        } else {
-            $sql .= " AND s.status = ?";
-            $params[] = $status;
-        }
-
-        if ($batchId !== '' && $batchId !== null) {
-            if ($status === 'all') {
-                $sql .= " AND COALESCE(s.joined_batch_id, s.preferred_batch_id) = ?";
-            } else {
-                $sql .= " AND s.joined_batch_id = ?";
-            }
-            $params[] = (int)$batchId;
-        }
-
-        $sql .= " ORDER BY s.created_at DESC LIMIT " . max(1, $limit);
+                LEFT JOIN batches pb ON pb.id = s.preferred_batch_id"
+                . $where
+                . " ORDER BY s.created_at DESC LIMIT {$limit} OFFSET {$offset}";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);

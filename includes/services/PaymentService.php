@@ -8,11 +8,13 @@ require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../functions.php';
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/ExportService.php';
+require_once __DIR__ . '/WhatsAppService.php';
 
 class PaymentService
 {
     /**
-     * Verify Payment Security PIN or User Password
+     * Verify Payment WhatsApp OTP, configured hashed Master PIN, or User Password
+     * with brute-force rate limiting (5 failures -> 5-minute cooldown).
      */
     public static function verifySecretPin(string $pin, int $userId): bool
     {
@@ -21,42 +23,89 @@ class PaymentService
             return false;
         }
 
+        // Enforce rate limit (per user/session)
+        $rateKey = '_pin_verify_attempts_' . $userId;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $state = $_SESSION[$rateKey] ?? ['attempts' => 0, 'locked_until' => 0];
+            if (($state['locked_until'] ?? 0) > time()) {
+                $remainingSec = $state['locked_until'] - time();
+                $mins = max(1, (int)ceil($remainingSec / 60));
+                throw new RuntimeException("Too many failed PIN/OTP attempts. Please wait {$mins} minute(s) before trying again.");
+            }
+        }
+
+        $verified = false;
+
+        // 1. Check 6-digit WhatsApp OTP first
+        if (WhatsAppService::verifyOtp($pin)) {
+            $verified = true;
+        }
+
         $pdo = db();
-        
-        // 1. Check configured Payment Secret PIN in settings
-        $configuredPin = get_setting('payment_secret_pin', '1234');
-        if ($pin === $configuredPin) {
-            return true;
+
+        // 2. Check explicitly configured Master Payment Secret PIN (no insecure '1234' fallback)
+        if (!$verified) {
+            $configuredPin = trim((string)get_setting('payment_secret_pin', ''));
+            if ($configuredPin !== '') {
+                $hashInfo = password_get_info($configuredPin);
+                if (!empty($hashInfo['algo'])) {
+                    $verified = password_verify($pin, $configuredPin);
+                } elseif (hash_equals($configuredPin, $pin)) {
+                    // Transparently upgrade legacy plaintext configured PIN to bcrypt hash
+                    $verified = true;
+                    set_setting('payment_secret_pin', password_hash($pin, PASSWORD_DEFAULT), $userId);
+                }
+            }
         }
 
-        // 2. Also check if the user entered their own account login password
-        $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ? LIMIT 1");
-        $stmt->execute([$userId]);
-        $hash = $stmt->fetchColumn();
-        if ($hash && password_verify($pin, $hash)) {
-            return true;
+        // 3. Also check if the user entered their own account login password
+        if (!$verified) {
+            $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$userId]);
+            $hash = $stmt->fetchColumn();
+            if ($hash && password_verify($pin, $hash)) {
+                $verified = true;
+            }
         }
 
-        return false;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            if ($verified) {
+                unset($_SESSION[$rateKey]);
+            } else {
+                $state = $_SESSION[$rateKey] ?? ['attempts' => 0, 'locked_until' => 0];
+                $state['attempts'] = ($state['attempts'] ?? 0) + 1;
+                if ($state['attempts'] >= 5) {
+                    $state['locked_until'] = time() + 300;
+                    $state['attempts'] = 0;
+                }
+                $_SESSION[$rateKey] = $state;
+            }
+        }
+
+        return $verified;
     }
 
     /**
-     * Update Payment Secret PIN
+     * Update Payment Secret PIN (stored hashed; rejects trivial defaults)
      */
     public static function updateSecretPin(string $newPin, int $actorId): bool
     {
         $newPin = trim($newPin);
         if (strlen($newPin) < 4) {
-            throw new InvalidArgumentException('નવો સિક્રેટ પિન ઓછામાં ઓછો 4 અક્ષર/આંકડાનો હોવો જોઈએ.');
+            throw new InvalidArgumentException('New secret PIN must be at least 4 characters long.');
+        }
+        if (in_array($newPin, ['1234', '0000', '1111', '123456'], true)) {
+            throw new InvalidArgumentException('Please choose a stronger secret PIN (weak common PINs are not allowed).');
         }
 
+        $hashedPin = password_hash($newPin, PASSWORD_DEFAULT);
         $pdo = db();
         $stmt = $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, setting_group, description, updated_by)
-            VALUES ('payment_secret_pin', ?, 'security', 'Secret PIN required to authorize and record payment entries', ?)
+            VALUES ('payment_secret_pin', ?, 'security', 'Hashed Secret PIN required to authorize and record payment entries', ?)
             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()
         ");
-        $stmt->execute([$newPin, $actorId]);
+        $stmt->execute([$hashedPin, $actorId]);
 
         log_audit('settings', 0, 'update_payment_pin', null, ['updated_by' => $actorId]);
         return true;
@@ -73,7 +122,7 @@ class PaymentService
         $student = $stStmt->fetch();
 
         if (!$student) {
-            throw new RuntimeException("વિદ્યાર્થી રેકોર્ડ મળ્યો નથી (ID: {$studentId}).");
+            throw new RuntimeException("Student record not found (ID: {$studentId}).");
         }
 
         // Standard Fee Configuration from Settings
@@ -142,40 +191,40 @@ class PaymentService
         // Stage Eligibility Flags & Restrictions (Duplicate Prevention & Due Max Caps)
         $stages = [
             'form_fee' => [
-                'label' => 'Form Fee (ફોર્મ ફી - ₹500)',
+                'label' => 'Form Fee (₹500)',
                 'is_paid' => $isFormPaid,
                 'paid_amount' => $paidForm,
                 'required_amount' => $formFeeAmt,
                 'due_amount' => $formDue,
                 'is_allowed' => !$isFormPaid,
-                'blocked_reason' => $isFormPaid ? 'આ વિદ્યાર્થી દ્વારા ફોર્મ ફી (₹500) પહેલેથી ભરાઈ ગયેલ છે.' : null
+                'blocked_reason' => $isFormPaid ? 'Form fee has already been paid for this student.' : null
             ],
             'joining_fee' => [
-                'label' => '1st Payment on Joining (એન્ટ્રી ફી - ₹3,500)',
+                'label' => '1st Payment on Joining (₹3,500)',
                 'is_paid' => $isJoiningPaid,
                 'paid_amount' => $paidJoining,
                 'required_amount' => $joiningFeeAmt,
                 'due_amount' => $joiningDue,
                 'is_allowed' => !$isJoiningPaid,
-                'blocked_reason' => $isJoiningPaid ? 'આ વિદ્યાર્થી દ્વારા જોઈનિંગ ફી (₹3,500) પહેલેથી ભરાઈ ગયેલ છે.' : null
+                'blocked_reason' => $isJoiningPaid ? 'Joining fee has already been paid for this student.' : null
             ],
             'second_payment' => [
-                'label' => '2nd Payment (બીજો હપ્તો / બાકી ફી - ₹4,000)',
+                'label' => '2nd Payment / Final Installment (₹4,000)',
                 'is_paid' => $isSecondPaid,
                 'paid_amount' => $paidSecond,
                 'required_amount' => $secondPaymentAmt,
                 'due_amount' => $secondDue,
                 'is_allowed' => !$isSecondPaid,
-                'blocked_reason' => $isSecondPaid ? 'આ વિદ્યાર્થી દ્વારા બીજો હપ્તો (₹4,000) પહેલેથી સંપૂર્ણ ભરાઈ ગયેલ છે.' : null
+                'blocked_reason' => $isSecondPaid ? 'Second payment installment has already been paid in full.' : null
             ],
             'extension_fee' => [
-                'label' => 'Extension Fee (વધારાના દિવસોની ફી)',
+                'label' => 'Extension Fee',
                 'is_paid' => ($extDue <= 0 && $paidExtension > 0),
                 'paid_amount' => $paidExtension,
                 'required_amount' => $extTotalRequired,
                 'due_amount' => $extDue,
                 'is_allowed' => ($extDue > 0),
-                'blocked_reason' => ($extDue <= 0) ? 'આ વિદ્યાર્થી માટે વધારાના દિવસોની કોઈ બાકી ફી નથી.' : null,
+                'blocked_reason' => ($extDue <= 0) ? 'No pending extension fee due for this student.' : null,
                 'invoices' => $unpaidInvoices
             ],
             'other' => [
@@ -220,20 +269,20 @@ class PaymentService
         require_once __DIR__ . '/../queue_engine.php';
         
         if ($studentId <= 0) {
-            throw new InvalidArgumentException('મહેરબાની કરીને વિદ્યાર્થી પસંદ કરો.');
+            throw new InvalidArgumentException('Please select a student.');
         }
 
         if ($amount <= 0) {
-            throw new InvalidArgumentException('પેમેન્ટ રકમ શૂન્ય કરતાં વધારે હોવી જોઈએ.');
+            throw new InvalidArgumentException('Payment amount must be greater than zero.');
         }
 
         // 1. SECURITY PASSWORD / PIN VALIDATION
         if (!$bypassPin) {
             if (empty($secretPin)) {
-                throw new InvalidArgumentException('સિક્યોરિટી પાસવર્ડ / PIN દાખલ કરવો ફરજિયાત છે.');
+                throw new InvalidArgumentException('Security PIN, OTP, or password is required.');
             }
             if (!self::verifySecretPin($secretPin, $collectedBy)) {
-                throw new InvalidArgumentException('દાખલ કરેલ સિક્રેટ પાસવર્ડ / PIN ખોટો છે! પેમેન્ટ સિક્યોરિટી ચકાસણી નિષ્ફળ ગઈ.');
+                throw new InvalidArgumentException('Invalid security PIN / OTP or password. Authorization failed.');
             }
         }
 
@@ -242,23 +291,23 @@ class PaymentService
         $stageInfo = $ledger['stages'][$stage] ?? null;
 
         if (!$stageInfo) {
-            throw new InvalidArgumentException('અમાન્ય પેમેન્ટ તબક્કો (Invalid stage).');
+            throw new InvalidArgumentException('Invalid payment stage.');
         }
 
         // DUPLICATE PAYMENT CHECK
         if (!$stageInfo['is_allowed'] && $stage !== 'other') {
-            throw new InvalidArgumentException($stageInfo['blocked_reason'] ?: 'આ તબક્કા માટે પેમેન્ટ સ્વીકાર્ય નથી.');
+            throw new InvalidArgumentException($stageInfo['blocked_reason'] ?: 'Payment is not allowed for this stage.');
         }
 
         // DUE AMOUNT OVER-PAYMENT LIMIT CHECK
         if ($stage !== 'other') {
             $maxAllowed = (float)$stageInfo['due_amount'];
             if ($maxAllowed <= 0) {
-                throw new InvalidArgumentException("આ તબક્કા માટે કોઈ બાકી રકમ નથી (સંપૂર્ણ રકમ પહેલેથી ભરાઈ ગયેલ છે). ડુપ્લિકેટ પેમેન્ટ સ્વીકાર્ય નથી.");
+                throw new InvalidArgumentException('No pending balance remains for this stage. Duplicate payments are not allowed.');
             }
             if ($amount > $maxAllowed) {
                 $formattedMax = number_format($maxAllowed, 2);
-                throw new InvalidArgumentException("આ તબક્કા માટે બાકી રકમ (₹{$formattedMax}) કરતાં વધુ રકમ ભરી શકાશે નહીં. તમે દાખલ કરેલ રકમ: ₹" . number_format($amount, 2));
+                throw new InvalidArgumentException("Amount cannot exceed the pending balance of ₹{$formattedMax} (entered: ₹" . number_format($amount, 2) . ').');
             }
         }
 
@@ -326,7 +375,7 @@ class PaymentService
     {
         // 1. PIN verification
         if (!self::verifySecretPin($secretPin, $actorId)) {
-            throw new InvalidArgumentException('દાખલ કરેલ સિક્રેટ પાસવર્ડ / PIN ખોટો છે!');
+            throw new InvalidArgumentException('Invalid security PIN / OTP or password.');
         }
 
         $pdo = db();
@@ -337,7 +386,7 @@ class PaymentService
             $stmt->execute([$paymentId]);
             $payment = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$payment) {
-                throw new RuntimeException('પેમેન્ટ રેકોર્ડ મળ્યો નથી.');
+                throw new RuntimeException('Payment record not found.');
             }
 
             $studentId = (int)$payment['student_id'];
@@ -386,49 +435,79 @@ class PaymentService
         }
     }
 
+    private static function buildPaymentFilterWhere(array $filters, array &$params): string
+    {
+        $stage = $filters['stage'] ?? '';
+        $method = $filters['method'] ?? '';
+        $search = trim($filters['search'] ?? '');
+        $from = $filters['from'] ?? '';
+        $to = $filters['to'] ?? '';
+        $where = " WHERE p.status = 'success'";
+
+        if ($stage !== '') {
+            $where .= " AND p.stage = ?";
+            $params[] = $stage;
+        }
+        if ($method !== '') {
+            $where .= " AND p.method = ?";
+            $params[] = $method;
+        }
+        if ($from !== '') {
+            $where .= " AND p.payment_date >= ?";
+            $params[] = $from . ' 00:00:00';
+        }
+        if ($to !== '') {
+            $where .= " AND p.payment_date <= ?";
+            $params[] = $to . ' 23:59:59';
+        }
+        if ($search !== '') {
+            $where .= " AND (p.receipt_no LIKE ? OR p.reference_no LIKE ? OR s.name LIKE ? OR s.student_mobile LIKE ? OR s.registration_no LIKE ? OR s.form_no LIKE ?)";
+            $like = "%$search%";
+            array_push($params, $like, $like, $like, $like, $like, $like);
+        }
+
+        return $where;
+    }
+
+    /**
+     * Count and total amount across all matching payments (for pagination)
+     */
+    public static function getPaymentsSummary(array $filters = []): array
+    {
+        $pdo = db();
+        $params = [];
+        $where = self::buildPaymentFilterWhere($filters, $params);
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) AS cnt, COALESCE(SUM(p.amount), 0) AS total_amount
+            FROM payments p
+            JOIN students s ON s.id = p.student_id"
+            . $where
+        );
+        $stmt->execute($params);
+        $row = $stmt->fetch() ?: [];
+        return [
+            'count' => (int)($row['cnt'] ?? 0),
+            'total_amount' => (float)($row['total_amount'] ?? 0),
+        ];
+    }
+
     /**
      * Get filtered list of payments
      */
     public static function getPayments(array $filters = []): array
     {
         $pdo = db();
-        $stage = $filters['stage'] ?? '';
-        $method = $filters['method'] ?? '';
-        $search = trim($filters['search'] ?? '');
-        $from = $filters['from'] ?? '';
-        $to = $filters['to'] ?? '';
-        $limit = (int)($filters['limit'] ?? 300);
+        $limit = max(1, (int)($filters['limit'] ?? 300));
+        $offset = max(0, (int)($filters['offset'] ?? 0));
+        $params = [];
+        $where = self::buildPaymentFilterWhere($filters, $params);
 
         $sql = "SELECT p.*, s.name AS student_name, s.registration_no, s.form_no, s.student_mobile, u.name AS collected_by_name
                 FROM payments p
                 JOIN students s ON s.id = p.student_id
-                LEFT JOIN users u ON u.id = p.collected_by
-                WHERE p.status = 'success'";
-        $params = [];
-
-        if ($stage !== '') {
-            $sql .= " AND p.stage = ?";
-            $params[] = $stage;
-        }
-        if ($method !== '') {
-            $sql .= " AND p.method = ?";
-            $params[] = $method;
-        }
-        if ($from !== '') {
-            $sql .= " AND p.payment_date >= ?";
-            $params[] = $from . ' 00:00:00';
-        }
-        if ($to !== '') {
-            $sql .= " AND p.payment_date <= ?";
-            $params[] = $to . ' 23:59:59';
-        }
-        if ($search !== '') {
-            $sql .= " AND (p.receipt_no LIKE ? OR p.reference_no LIKE ? OR s.name LIKE ? OR s.student_mobile LIKE ? OR s.registration_no LIKE ? OR s.form_no LIKE ?)";
-            $like = "%$search%";
-            array_push($params, $like, $like, $like, $like, $like, $like);
-        }
-
-        $sql .= " ORDER BY p.payment_date DESC LIMIT " . max(1, $limit);
+                LEFT JOIN users u ON u.id = p.collected_by"
+                . $where
+                . " ORDER BY p.payment_date DESC LIMIT {$limit} OFFSET {$offset}";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -488,6 +567,7 @@ class PaymentService
             SELECT id, name, registration_no, form_no, student_mobile, entry_date, expected_joining_date, status 
             FROM students 
             WHERE status IN ('confirmed', 'waiting_ready', 'joining_confirmed', 'active', 'extended', 'course_completed')
+              AND is_temporary = 0
             ORDER BY name ASC
         ")->fetchAll();
 
@@ -513,7 +593,7 @@ class PaymentService
                         'registration_no' => $st['registration_no'] ?: $st['form_no'],
                         'student_mobile' => $st['student_mobile'],
                         'stage' => 'joining_fee',
-                        'fee_label' => '1st Payment on Joining (એન્ટ્રી ફી)',
+                        'fee_label' => '1st Payment on Joining',
                         'amount' => $rem,
                         'due_date' => $entryDate ? date('d-M-Y', strtotime($entryDate)) : 'On Joining',
                         'is_urgent' => false
@@ -533,7 +613,7 @@ class PaymentService
                         'registration_no' => $st['registration_no'] ?: $st['form_no'],
                         'student_mobile' => $st['student_mobile'],
                         'stage' => 'second_payment',
-                        'fee_label' => '2nd Payment (બીજો હપ્તો)',
+                        'fee_label' => '2nd Payment Installment',
                         'amount' => $remSec,
                         'due_date' => $dueDate,
                         'is_urgent' => $isUrgent
@@ -552,9 +632,9 @@ class PaymentService
                     'registration_no' => $st['registration_no'] ?: $st['form_no'],
                     'student_mobile' => $st['student_mobile'],
                     'stage' => 'extension_fee',
-                    'fee_label' => 'Extension Fee (વધારાના દિવસો)',
+                    'fee_label' => 'Extension Fee',
                     'amount' => $extTotal,
-                    'due_date' => 'Immediate (તાત્કાલિક)',
+                    'due_date' => 'Immediate',
                     'is_urgent' => true
                 ];
             }

@@ -121,6 +121,18 @@ CREATE TABLE IF NOT EXISTS students (
     -- Photo
     photo_path VARCHAR(255) DEFAULT NULL,
 
+    -- Additional Details & Guardian
+    hear_about_us VARCHAR(100) DEFAULT NULL,
+    guardian_signature_name VARCHAR(150) DEFAULT NULL,
+    guardian_relation VARCHAR(50) DEFAULT NULL,
+
+    -- Pause / Resume
+    is_paused TINYINT(1) NOT NULL DEFAULT 0,
+    paused_at DATE DEFAULT NULL,
+    paused_remaining_days INT DEFAULT 0,
+    resume_ready_date DATE DEFAULT NULL,
+    pause_reason TEXT DEFAULT NULL,
+
     -- Overall status
     status ENUM(
         'draft','confirmed',
@@ -134,6 +146,7 @@ CREATE TABLE IF NOT EXISTS students (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     is_imported TINYINT(1) NOT NULL DEFAULT 0,  -- migrated/historical record flag
+    is_temporary TINYINT(1) NOT NULL DEFAULT 0, -- manually created temporary unrecorded student
 
     FOREIGN KEY (preferred_batch_id) REFERENCES batches(id),
     FOREIGN KEY (joined_batch_id) REFERENCES batches(id),
@@ -285,6 +298,8 @@ CREATE TABLE IF NOT EXISTS payments (
     reference_no VARCHAR(100) DEFAULT NULL,
     receipt_no VARCHAR(30) NOT NULL UNIQUE,
     status ENUM('pending','success','failed','refunded') NOT NULL DEFAULT 'success',
+    is_manual TINYINT(1) NOT NULL DEFAULT 0,
+    notes VARCHAR(255) DEFAULT NULL,
     collected_by INT UNSIGNED DEFAULT NULL,
     payment_date DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -453,3 +468,80 @@ INSERT IGNORE INTO settings (setting_key, setting_value, setting_group, descript
 
 INSERT IGNORE INTO extension_charge_rates (per_day_charge, effective_from, status, created_by) VALUES
 (150.00, CURDATE(), 'active', 1);
+
+-- ---------------------------------------------------------
+-- 17. PAYMENT WHATSAPP OTPS
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS payment_otps (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    otp_code VARCHAR(10) NOT NULL,
+    context ENUM('payment','manual_receipt','delete_payment') NOT NULL DEFAULT 'payment',
+    student_name VARCHAR(150) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    stage_label VARCHAR(150) NOT NULL,
+    method VARCHAR(50) NOT NULL,
+    details_json TEXT DEFAULT NULL,
+    sent_to_1 VARCHAR(20) DEFAULT NULL,
+    sent_to_2 VARCHAR(20) DEFAULT NULL,
+    status ENUM('pending','verified','expired') NOT NULL DEFAULT 'pending',
+    requested_by INT UNSIGNED DEFAULT NULL,
+    expires_at DATETIME NOT NULL,
+    verified_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_otp_code_status (otp_code, status),
+    INDEX idx_otp_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO settings (setting_key, setting_value, setting_group, description) VALUES
+('wa_otp_enabled', '1', 'whatsapp', 'Enable WhatsApp OTP verification for payments and receipts'),
+('wa_phone_number_id', '', 'whatsapp', 'Meta WhatsApp Cloud API Phone Number ID'),
+('wa_access_token', '', 'whatsapp', 'Meta WhatsApp Cloud API Permanent Access Token'),
+('wa_api_version', 'v21.0', 'whatsapp', 'Meta Graph API Version'),
+('wa_template_name', '', 'whatsapp', 'Approved Meta WhatsApp Template Name'),
+('wa_template_lang', 'en', 'whatsapp', 'Meta WhatsApp Template Language Code'),
+('wa_otp_mobile_1', '', 'whatsapp', 'Primary Admin/Owner WhatsApp Number for OTP'),
+('wa_otp_mobile_2', '', 'whatsapp', 'Secondary Admin/Owner WhatsApp Number for OTP');
+
+
+-- Default Super Admin User (Login: admin@devangistudent.com / Password: Admin@123)
+INSERT IGNORE INTO users (id, role_id, name, email, phone, password_hash, status) 
+VALUES (1, 1, 'Super Admin', 'admin@devangistudent.com', '9999999999', '$2y$10$3TmcfhpYQ.dn3MBAleCJ6.My7qet2iFdFYwf33J.6qLg522I6MCbS', 'active');
+
+
+-- ---------------------------------------------------------
+-- 18. STUDENT LEAVE & EXTENSION REQUESTS
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_leave_requests (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT UNSIGNED NOT NULL,
+    leave_type VARCHAR(50) NOT NULL DEFAULT 'leave',
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    total_days INT NOT NULL DEFAULT 1,
+    reason TEXT DEFAULT NULL,
+    status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    admin_note TEXT DEFAULT NULL,
+    reviewed_by INT UNSIGNED DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_leave_student (student_id),
+    INDEX idx_leave_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------
+-- 19. STUDENT NOTICES
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_notices (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    batch_id INT UNSIGNED DEFAULT NULL,
+    priority ENUM('normal', 'important', 'urgent') NOT NULL DEFAULT 'normal',
+    created_by INT UNSIGNED DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_notice_batch (batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

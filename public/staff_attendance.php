@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/services/StaffService.php';
 require_once __DIR__ . '/../includes/services/AttendanceService.php';
 require_once __DIR__ . '/../includes/services/ExportService.php';
+require_once __DIR__ . '/../includes/components/kpi_card.php';
 
 require_admin();
 
@@ -21,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $date = $_POST['date'] ?? date('Y-m-d');
             $sheet = $_POST['attendance'] ?? [];
             $count = AttendanceService::saveDailySheet($date, $sheet, (int)$user['id']);
-            flash('success', "તારીખ " . date('d-m-Y', strtotime($date)) . " ની સ્ટાફ હાજરી સફળતાપૂર્વક સાચવી લેવામાં આવી ({$count} સ્ટાફ).");
+            flash('success', 'Attendance saved for ' . date('d M Y', strtotime($date)) . " ({$count} staff).");
             redirect('public/staff_attendance.php?date=' . urlencode($date));
 
         } elseif ($action === 'mark_all_status') {
@@ -32,11 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($staffList as $st) {
                 $sheet[$st['id']] = [
                     'status' => $status,
-                    'notes' => ($status === 'holiday' ? 'સંસ્થાની રજા' : null)
+                    'notes' => ($status === 'holiday' ? 'Institute Holiday' : null)
                 ];
             }
             AttendanceService::saveDailySheet($date, $sheet, (int)$user['id']);
-            flash('success', "તમામ સ્ટાફ માટે '{$status}' સ્ટેટસ સફળતાપૂર્વક લાગુ કરવામાં આવ્યું.");
+            flash('success', "All active staff marked as '" . ucfirst(str_replace('_', ' ', $status)) . "' for " . date('d M Y', strtotime($date)) . '.');
             redirect('public/staff_attendance.php?date=' . urlencode($date));
         }
     } catch (Throwable $e) {
@@ -83,48 +84,14 @@ require_once __DIR__ . '/../includes/layout_header.php';
 ?>
 
 <style>
-/* Attendance Navigation Tabs */
-.staff-subnav {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 12px;
-    flex-wrap: wrap;
-}
-.staff-subnav-item {
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13.5px;
-    font-weight: 600;
-    text-decoration: none;
-    color: #64748b;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    transition: all 0.15s ease;
-}
-.staff-subnav-item:hover {
-    color: #4338ca;
-    background: #eef2ff;
-    border-color: #c7d2fe;
-}
-.staff-subnav-item.active {
-    color: #ffffff;
-    background: #4338ca;
-    border-color: #4338ca;
-}
-
-/* Status Radio / Segmented pill controls */
+/* Status Segmented Radio Controls */
 .att-radio-group {
     display: inline-flex;
-    background: #f1f5f9;
+    background: var(--surface-subtle);
     padding: 3px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     gap: 2px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border);
     flex-wrap: wrap;
 }
 .att-radio-btn {
@@ -139,37 +106,37 @@ require_once __DIR__ . '/../includes/layout_header.php';
 }
 .att-radio-label {
     display: inline-block;
-    padding: 5px 11px;
-    border-radius: 6px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
     font-size: 12px;
-    font-weight: 700;
-    color: #475569;
+    font-weight: 600;
+    color: var(--muted);
     user-select: none;
     transition: all 0.15s ease;
+    white-space: nowrap;
 }
 .att-radio-btn input:checked + .att-radio-label.lbl-present {
-    background: #16a34a; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: var(--success); color: #FFFFFF; box-shadow: var(--shadow-xs);
 }
 .att-radio-btn input:checked + .att-radio-label.lbl-halfday {
-    background: #d97706; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: var(--warning); color: #FFFFFF; box-shadow: var(--shadow-xs);
 }
 .att-radio-btn input:checked + .att-radio-label.lbl-absent {
-    background: #dc2626; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: var(--danger); color: #FFFFFF; box-shadow: var(--shadow-xs);
 }
 .att-radio-btn input:checked + .att-radio-label.lbl-paidleave {
-    background: #2563eb; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: #2563EB; color: #FFFFFF; box-shadow: var(--shadow-xs);
 }
 .att-radio-btn input:checked + .att-radio-label.lbl-holiday {
-    background: #7c3aed; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    background: var(--primary); color: #FFFFFF; box-shadow: var(--shadow-xs);
 }
 
-/* Matrix Table */
+/* Monthly Matrix Table */
 .matrix-container {
     overflow-x: auto;
     max-width: 100%;
-    margin-top: 15px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
 }
 .matrix-table {
     border-collapse: separate;
@@ -178,77 +145,138 @@ require_once __DIR__ . '/../includes/layout_header.php';
     font-size: 11.5px;
 }
 .matrix-table th, .matrix-table td {
-    padding: 6px 5px;
+    padding: 7px 6px;
     text-align: center;
-    border-right: 1px solid #f1f5f9;
-    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
     white-space: nowrap;
 }
 .matrix-table th {
-    background: #f8fafc;
+    background: #F8FAFC;
     font-weight: 700;
-    color: #475569;
+    color: var(--muted);
     position: sticky;
     top: 0;
 }
 .matrix-table th.col-sun, .matrix-table td.col-sun {
-    background: #fff1f2 !important;
-    color: #be123c;
+    background: #FFF1F2 !important;
+    color: #BE123C;
 }
 .matrix-table th.col-hol, .matrix-table td.col-hol {
-    background: #f5f3ff !important;
-    color: #6d28d9;
+    background: var(--primary-light) !important;
+    color: var(--primary-hover);
 }
 .matrix-table th.sticky-name, .matrix-table td.sticky-name {
     position: sticky;
     left: 0;
-    background: #ffffff;
+    background: #FFFFFF;
     z-index: 2;
     text-align: left;
-    min-width: 150px;
+    min-width: 170px;
     font-weight: 600;
-    border-right: 2px solid #cbd5e1;
+    border-right: 2px solid var(--border);
 }
 .matrix-badge {
     display: inline-block;
     width: 22px;
     height: 22px;
     line-height: 22px;
-    border-radius: 4px;
-    font-weight: 800;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
     font-size: 10.5px;
+    text-align: center;
 }
-.mb-P { background: #dcfce7; color: #166534; }
-.mb-HD { background: #fef3c7; color: #92400e; }
-.mb-A { background: #fee2e2; color: #991b1b; }
-.mb-PL { background: #dbeafe; color: #1e40af; }
-.mb-H { background: #ede9fe; color: #5b21b6; }
-.mb-unmarked { background: #f1f5f9; color: #94a3b8; }
-.mb-future { background: transparent; color: #cbd5e1; }
+.mb-P { background: var(--success-bg); color: #166534; }
+.mb-HD { background: var(--warning-bg); color: #92400E; }
+.mb-A { background: var(--danger-bg); color: #991B1B; }
+.mb-PL { background: #DBEAFE; color: #1E40AF; }
+.mb-H { background: var(--primary-light); color: var(--primary-hover); }
+.mb-unmarked { background: var(--surface-subtle); color: #94A3B8; }
+.mb-future { background: transparent; color: #CBD5E1; }
+
+.rules-callout {
+    background: var(--surface-subtle);
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    margin-top: 16px;
+    font-size: 12.5px;
+    color: var(--text-body);
+    border: 1px solid var(--border);
+}
+.rules-callout ul {
+    margin: 6px 0 0 18px;
+    padding: 0;
+    line-height: 1.6;
+}
 </style>
 
-<!-- Sub Navigation Tabs for Staff Module -->
-<div class="staff-subnav">
-    <a href="<?= url('public/staff.php') ?>" class="staff-subnav-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Staff Directory (સ્ટાફ લિસ્ટ)
+<!-- Page Header -->
+<div class="page-header">
+    <div>
+        <p class="page-header-subtitle">
+            <?php if ($view === 'daily'): ?>
+                Record daily attendance, check-in/out times, and leave status for <?= date('d M Y', strtotime($selectedDate)) ?>.
+            <?php else: ?>
+                Review monthly attendance matrix and payable days for <?= e($monthlyRegister['month_name']) ?>.
+            <?php endif; ?>
+        </p>
+    </div>
+    <div class="action-group">
+        <?php if ($view === 'daily'): ?>
+            <form method="post" style="display: inline; margin: 0;" onsubmit="return confirm('Mark all active staff as Present for <?= date('d M Y', strtotime($selectedDate)) ?>?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="mark_all_status">
+                <input type="hidden" name="date" value="<?= e($selectedDate) ?>">
+                <input type="hidden" name="status" value="present">
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+                    Mark All Present
+                </button>
+            </form>
+            <form method="post" style="display: inline; margin: 0;" onsubmit="return confirm('Mark <?= date('d M Y', strtotime($selectedDate)) ?> as a Paid Institute Holiday for all active staff?');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="mark_all_status">
+                <input type="hidden" name="date" value="<?= e($selectedDate) ?>">
+                <input type="hidden" name="status" value="holiday">
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    Mark All Holiday
+                </button>
+            </form>
+        <?php else: ?>
+            <a href="?view=monthly&year=<?= $selectedYear ?>&month=<?= $selectedMonth ?>&export=monthly_csv" class="btn btn-secondary btn-export btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+            </a>
+            <a href="<?= url('public/staff_payroll.php?month=' . sprintf('%04d-%02d', $selectedYear, $selectedMonth)) ?>" class="btn btn-sm">
+                Calculate Payroll (<?= date('M Y', strtotime(sprintf('%04d-%02d-01', $selectedYear, $selectedMonth))) ?>)
+            </a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Staff Module Sub-Navigation -->
+<div class="tabs-underline">
+    <a href="<?= url('public/staff.php') ?>" class="tab-underline-btn" style="text-decoration: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Staff Directory
     </a>
-    <a href="<?= url('public/staff_attendance.php?view=daily') ?>" class="staff-subnav-item <?= $view === 'daily' ? 'active' : '' ?>">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Daily Attendance (દૈનિક હાજરી)
+    <a href="<?= url('public/staff_attendance.php?view=daily') ?>" class="tab-underline-btn <?= $view === 'daily' ? 'active' : '' ?>" style="text-decoration: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Daily Attendance
     </a>
-    <a href="<?= url('public/staff_attendance.php?view=monthly') ?>" class="staff-subnav-item <?= $view === 'monthly' ? 'active' : '' ?>">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        Monthly Register (માસિક રજીસ્ટર)
+    <a href="<?= url('public/staff_attendance.php?view=monthly') ?>" class="tab-underline-btn <?= $view === 'monthly' ? 'active' : '' ?>" style="text-decoration: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Monthly Register
     </a>
-    <a href="<?= url('public/staff_payroll.php') ?>" class="staff-subnav-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-        Payroll & Salary (પગાર ગણતરી & સ્લિપ)
+    <a href="<?= url('public/staff_payroll.php') ?>" class="tab-underline-btn" style="text-decoration: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Payroll &amp; Salary
     </a>
 </div>
 
 <?php if ($error): ?>
-    <div class="flash flash-error" style="margin-bottom: 20px;">
+    <div class="flash flash-error">
         <?= e($error) ?>
     </div>
 <?php endif; ?>
@@ -263,75 +291,40 @@ require_once __DIR__ . '/../includes/layout_header.php';
     $isToday = ($selectedDate === date('Y-m-d'));
     ?>
 
-    <!-- Top KPI Cards for Selected Date -->
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 22px;">
-        <div class="card" style="margin: 0; padding: 14px 16px; border-left: 4px solid #4338ca;">
-            <div style="font-size: 24px; font-weight: 800; color: #1e293b;"><?= $dailyKPIs['total_staff'] ?></div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">કુલ સ્ટાફ (Total Staff)</div>
-        </div>
-        <div class="card" style="margin: 0; padding: 14px 16px; border-left: 4px solid #16a34a;">
-            <div style="font-size: 24px; font-weight: 800; color: #16a34a;"><?= $dailyKPIs['present'] ?></div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">હાજર (Full Day Present)</div>
-        </div>
-        <div class="card" style="margin: 0; padding: 14px 16px; border-left: 4px solid #d97706;">
-            <div style="font-size: 24px; font-weight: 800; color: #d97706;"><?= $dailyKPIs['half_day'] ?></div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">અડધો દિવસ (Half Day - 0.5)</div>
-        </div>
-        <div class="card" style="margin: 0; padding: 14px 16px; border-left: 4px solid #dc2626;">
-            <div style="font-size: 24px; font-weight: 800; color: #dc2626;"><?= $dailyKPIs['absent'] ?></div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">ગેરહાજર (Absent - LOP)</div>
-        </div>
-        <div class="card" style="margin: 0; padding: 14px 16px; border-left: 4px solid #7c3aed;">
-            <div style="font-size: 24px; font-weight: 800; color: #7c3aed;"><?= $dailyKPIs['holiday'] + $dailyKPIs['paid_leave'] ?></div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">રજા / સંસ્થા રજા (Holiday)</div>
-        </div>
+    <!-- Daily KPI Summary -->
+    <div class="grid grid-5" style="margin-bottom: 20px;">
+        <?= render_kpi_card('Total Staff', (string)$dailyKPIs['total_staff'], 'Active headcount', '', 'primary') ?>
+        <?= render_kpi_card('Present', (string)$dailyKPIs['present'], 'Full day credit', '', 'success') ?>
+        <?= render_kpi_card('Half Day', (string)$dailyKPIs['half_day'], '0.5 day credit', '', 'warning') ?>
+        <?= render_kpi_card('Absent (LOP)', (string)$dailyKPIs['absent'], 'Unpaid absence', '', 'danger') ?>
+        <?= render_kpi_card('Leave / Holiday', (string)($dailyKPIs['holiday'] + $dailyKPIs['paid_leave']), 'Paid days off', '', 'default') ?>
     </div>
 
-    <!-- Date Bar & Controls -->
-    <div class="card" style="margin-bottom: 20px; padding: 14px 18px;">
+    <!-- Date Selector Bar -->
+    <div class="card" style="padding: 14px 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <a href="?view=daily&date=<?= e($prevDate) ?>" class="btn btn-sm btn-secondary" title="અગાઉનો દિવસ">◀ ગઈકાલે</a>
-                <form method="get" action="" style="display: inline-flex; align-items: center; gap: 6px; margin: 0;">
+            <div class="action-group">
+                <a href="?view=daily&date=<?= e($prevDate) ?>" class="btn btn-sm btn-secondary" title="Previous Day">&larr; Prev Day</a>
+                <form method="get" action="" style="display: inline-flex; align-items: center; margin: 0;">
                     <input type="hidden" name="view" value="daily">
-                    <input type="date" name="date" value="<?= e($selectedDate) ?>" onchange="this.form.submit()" style="margin:0; font-weight: 700; font-size: 14px; padding: 6px 12px;">
+                    <input type="date" name="date" value="<?= e($selectedDate) ?>" onchange="this.form.submit()" style="width: auto; font-weight: 600;">
                 </form>
-                <a href="?view=daily&date=<?= e($nextDate) ?>" class="btn btn-sm btn-secondary" title="પછીનો દિવસ">આવતીકાલે ▶</a>
+                <a href="?view=daily&date=<?= e($nextDate) ?>" class="btn btn-sm btn-secondary" title="Next Day">Next Day &rarr;</a>
                 <?php if (!$isToday): ?>
-                    <a href="?view=daily&date=<?= date('Y-m-d') ?>" class="btn btn-sm btn-secondary" style="font-size: 12px;">આજે (Today)</a>
+                    <a href="?view=daily&date=<?= date('Y-m-d') ?>" class="btn btn-sm btn-secondary">Today</a>
                 <?php endif; ?>
             </div>
-
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('બધા જ સ્ટાફને હાજર (Present) તરીકે સેટ કરવા છે?');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="mark_all_status">
-                    <input type="hidden" name="date" value="<?= e($selectedDate) ?>">
-                    <input type="hidden" name="status" value="present">
-                    <button type="submit" class="btn btn-secondary btn-sm" style="color: #166534; font-weight: 600;">
-                        ✔ Mark All Present (બધા હાજર)
-                    </button>
-                </form>
-
-                <form method="post" style="display:inline; margin:0;" onsubmit="return confirm('શું આ તારીખે સમગ્ર સ્ટાફ માટે રજા (Holiday) જાહેર કરવી છે? (પગાર કપાશે નહીં)');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="mark_all_status">
-                    <input type="hidden" name="date" value="<?= e($selectedDate) ?>">
-                    <input type="hidden" name="status" value="holiday">
-                    <button type="submit" class="btn btn-secondary btn-sm" style="color: #6d28d9; font-weight: 600;">
-                        🏖 Mark All Holiday (જાહેર રજા)
-                    </button>
-                </form>
+            <div class="muted" style="font-size: 13px; font-weight: 500;">
+                Selected: <strong style="color: var(--text);"><?= date('l, d M Y', strtotime($selectedDate)) ?></strong>
             </div>
         </div>
 
         <?php if ($dailySheet['holiday_info']): ?>
-            <div style="background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 10px 14px; margin-top: 14px; display: flex; align-items: center; gap: 10px; color: #5b21b6; font-size: 13.5px;">
-                <span style="font-size: 18px;">🏖</span>
+            <div class="flash flash-info" style="margin: 14px 0 0;">
                 <div>
-                    <strong>આ તારીખે સંસ્થાની રજા / વીકલી ઓફ છે:</strong> <?= e($dailySheet['holiday_info']['reason']) ?>
-                    <div style="font-size: 12px; color: #6d28d9; margin-top: 2px;">
-                        નિયમ મુજબ, સંસ્થા દ્વારા આપવામાં આવેલી રજા કે રવિવારના પગારમાં કોઈ કાપ મુકાશે નહીં (Not Countable for Deduction).
+                    <strong>Declared Holiday / Weekly Off:</strong> <?= e($dailySheet['holiday_info']['reason']) ?>
+                    <div style="font-size: 12px; opacity: 0.9; margin-top: 2px;">
+                        Institute holidays and Sundays are counted as paid days with zero salary deduction.
                     </div>
                 </div>
             </div>
@@ -345,92 +338,97 @@ require_once __DIR__ . '/../includes/layout_header.php';
         <input type="hidden" name="date" value="<?= e($selectedDate) ?>">
 
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0; font-size: 16px;">
-                    Attendance Sheet: <?= date('d M Y (l)', strtotime($selectedDate)) ?>
-                </h3>
-                <button type="submit" class="btn" style="padding: 8px 20px; font-weight: 700;">
-                    💾 Save Attendance (હાજરી સાચવો)
+            <div class="card-header-bar">
+                <div>
+                    <h2>Daily Attendance Sheet</h2>
+                    <p class="muted" style="margin: 2px 0 0; font-size: 12.5px;"><?= date('d M Y (l)', strtotime($selectedDate)) ?></p>
+                </div>
+                <button type="submit" class="btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Save Attendance
                 </button>
             </div>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 220px;">Staff Member</th>
-                        <th>Assigned Batches</th>
-                        <th style="min-width: 320px;">Attendance Status (હાજરી સ્થિતિ)</th>
-                        <th>Time (ઇન / આઉટ)</th>
-                        <th>Notes (નોંધ)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($dailySheet['staff'] as $st): ?>
-                        <?php 
-                        $att = $st['attendance'];
-                        $curStatus = $att['status'];
-                        ?>
+            <div class="table-wrap">
+                <table>
+                    <thead>
                         <tr>
-                            <td>
-                                <div style="font-weight: 700; color: #0f172a; font-size: 14px;"><?= e($st['name']) ?></div>
-                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                                    <?= e($st['designation']) ?> • <a href="tel:<?= e($st['phone']) ?>" style="color: #64748b;"><?= e($st['phone']) ?></a>
-                                </div>
-                            </td>
-                            <td>
-                                <span style="font-size: 12px; color: #475569;"><?= e($st['batches_str']) ?></span>
-                            </td>
-                            <td>
-                                <div class="att-radio-group">
-                                    <label class="att-radio-btn" title="સંપૂર્ણ દિવસ હાજર (1 Day)">
-                                        <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="present" <?= $curStatus === 'present' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
-                                        <span class="att-radio-label lbl-present">✔ Present (હાજર)</span>
-                                    </label>
-                                    <label class="att-radio-btn" title="અડધો દિવસ (0.5 Day)">
-                                        <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="half_day" <?= $curStatus === 'half_day' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
-                                        <span class="att-radio-label lbl-halfday">⏱ Half Day (0.5)</span>
-                                    </label>
-                                    <label class="att-radio-btn" title="ગેરહાજર - પગાર કપાશે (Unpaid Absent)">
-                                        <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="absent" <?= $curStatus === 'absent' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
-                                        <span class="att-radio-label lbl-absent">✖ Absent (ગેરહાજર)</span>
-                                    </label>
-                                    <label class="att-radio-btn" title="મંજૂર રજા (Paid Leave)">
-                                        <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="paid_leave" <?= $curStatus === 'paid_leave' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
-                                        <span class="att-radio-label lbl-paidleave">🌴 Leave (CL)</span>
-                                    </label>
-                                    <label class="att-radio-btn" title="સંસ્થાની રજા / વારતહેવાર (Paid Holiday)">
-                                        <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="holiday" <?= $curStatus === 'holiday' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
-                                        <span class="att-radio-label lbl-holiday">🏖 Holiday (રજા)</span>
-                                    </label>
-                                </div>
-
-                                <!-- Session selector for Half Day -->
-                                <div id="halfday_wrap_<?= $st['id'] ?>" style="display: <?= $curStatus === 'half_day' ? 'inline-block' : 'none' ?>; margin-top: 6px;">
-                                    <select name="attendance[<?= $st['id'] ?>][half_day_session]" style="font-size: 11.5px; padding: 4px 8px; margin: 0; width: auto;">
-                                        <option value="morning" <?= ($att['half_day_session'] ?? '') === 'morning' ? 'selected' : '' ?>>Morning Session (સવારનો સમય)</option>
-                                        <option value="afternoon" <?= ($att['half_day_session'] ?? '') === 'afternoon' ? 'selected' : '' ?>>Afternoon Session (બપોર પછી)</option>
-                                    </select>
-                                </div>
-                            </td>
-                            <td>
-                                <div style="display: flex; gap: 4px; align-items: center;">
-                                    <input type="time" name="attendance[<?= $st['id'] ?>][check_in_time]" value="<?= e($att['check_in_time'] ?? '') ?>" title="Check-In" style="width: 85px; font-size: 11.5px; padding: 4px; margin:0;">
-                                    <span style="color:#94a3b8;">-</span>
-                                    <input type="time" name="attendance[<?= $st['id'] ?>][check_out_time]" value="<?= e($att['check_out_time'] ?? '') ?>" title="Check-Out" style="width: 85px; font-size: 11.5px; padding: 4px; margin:0;">
-                                </div>
-                            </td>
-                            <td>
-                                <input type="text" name="attendance[<?= $st['id'] ?>][notes]" value="<?= e($att['notes'] ?? '') ?>" placeholder="નોંધ..." style="font-size: 12px; padding: 4px 8px; margin: 0; min-width: 140px;">
-                            </td>
+                            <th style="min-width: 200px;">Staff Member</th>
+                            <th>Assigned Batches</th>
+                            <th style="min-width: 340px;">Attendance Status</th>
+                            <th>In / Out Time</th>
+                            <th style="min-width: 150px;">Notes</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($dailySheet['staff'])): ?>
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 36px 20px; color: var(--muted);">
+                                    No active staff members found to mark attendance.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($dailySheet['staff'] as $st): ?>
+                                <?php
+                                $att = $st['attendance'];
+                                $curStatus = $att['status'];
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div style="font-weight: 600; color: var(--text); font-size: 13.5px;"><?= e($st['name']) ?></div>
+                                        <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                                            <?= e($st['designation']) ?> &middot; <a href="tel:<?= e($st['phone']) ?>" style="color: var(--muted);"><?= e($st['phone']) ?></a>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span style="font-size: 12.5px; color: var(--text-body);"><?= e($st['batches_str']) ?></span>
+                                    </td>
+                                    <td>
+                                        <div class="att-radio-group">
+                                            <label class="att-radio-btn" title="Full day present (1 Day)">
+                                                <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="present" <?= $curStatus === 'present' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
+                                                <span class="att-radio-label lbl-present">Present</span>
+                                            </label>
+                                            <label class="att-radio-btn" title="Half day present (0.5 Day)">
+                                                <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="half_day" <?= $curStatus === 'half_day' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
+                                                <span class="att-radio-label lbl-halfday">Half Day</span>
+                                            </label>
+                                            <label class="att-radio-btn" title="Unpaid absent (Loss of Pay)">
+                                                <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="absent" <?= $curStatus === 'absent' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
+                                                <span class="att-radio-label lbl-absent">Absent</span>
+                                            </label>
+                                            <label class="att-radio-btn" title="Approved Paid Leave">
+                                                <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="paid_leave" <?= $curStatus === 'paid_leave' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
+                                                <span class="att-radio-label lbl-paidleave">Leave (PL)</span>
+                                            </label>
+                                            <label class="att-radio-btn" title="Paid Institute Holiday">
+                                                <input type="radio" name="attendance[<?= $st['id'] ?>][status]" value="holiday" <?= $curStatus === 'holiday' ? 'checked' : '' ?> onchange="toggleHalfDaySelect(<?= $st['id'] ?>, this.value)">
+                                                <span class="att-radio-label lbl-holiday">Holiday</span>
+                                            </label>
+                                        </div>
 
-            <div style="margin-top: 18px; text-align: right;">
-                <button type="submit" class="btn" style="padding: 10px 24px; font-weight: 700; font-size: 14px;">
-                    💾 Save Attendance (હાજરી સાચવો)
-                </button>
+                                        <div id="halfday_wrap_<?= $st['id'] ?>" style="display: <?= $curStatus === 'half_day' ? 'block' : 'none' ?>; margin-top: 6px;">
+                                            <select name="attendance[<?= $st['id'] ?>][half_day_session]" style="width: auto; height: 30px; padding: 3px 10px; font-size: 12px;">
+                                                <option value="morning" <?= ($att['half_day_session'] ?? '') === 'morning' ? 'selected' : '' ?>>Morning Session</option>
+                                                <option value="afternoon" <?= ($att['half_day_session'] ?? '') === 'afternoon' ? 'selected' : '' ?>>Afternoon Session</option>
+                                            </select>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <input type="time" name="attendance[<?= $st['id'] ?>][check_in_time]" value="<?= e($att['check_in_time'] ?? '') ?>" title="Check-In Time" style="width: 110px; height: 32px; font-size: 12px; padding: 4px 8px;">
+                                            <span class="muted">-</span>
+                                            <input type="time" name="attendance[<?= $st['id'] ?>][check_out_time]" value="<?= e($att['check_out_time'] ?? '') ?>" title="Check-Out Time" style="width: 110px; height: 32px; font-size: 12px; padding: 4px 8px;">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="attendance[<?= $st['id'] ?>][notes]" value="<?= e($att['notes'] ?? '') ?>" placeholder="Optional notes..." style="height: 32px; font-size: 12.5px; padding: 4px 10px;">
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </form>
@@ -439,7 +437,7 @@ require_once __DIR__ . '/../includes/layout_header.php';
     function toggleHalfDaySelect(staffId, status) {
         var wrap = document.getElementById('halfday_wrap_' + staffId);
         if (wrap) {
-            wrap.style.display = (status === 'half_day') ? 'inline-block' : 'none';
+            wrap.style.display = (status === 'half_day') ? 'block' : 'none';
         }
     }
     </script>
@@ -456,79 +454,50 @@ require_once __DIR__ . '/../includes/layout_header.php';
     ];
     ?>
 
-    <!-- Monthly Filter Toolbar -->
-    <div class="card" style="margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <form method="get" action="" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0;">
-                <input type="hidden" name="view" value="monthly">
-                
-                <div>
-                    <label style="font-size: 12px; font-weight: 600; color: #64748b; display: block; margin-bottom: 2px;">Month (મહિનો)</label>
-                    <select name="month" style="margin: 0; font-weight: 600; padding: 6px 12px;" onchange="this.form.submit()">
-                        <?php foreach ($monthsList as $num => $mName): ?>
-                            <option value="<?= $num ?>" <?= $selectedMonth === $num ? 'selected' : '' ?>><?= $mName ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div>
-                    <label style="font-size: 12px; font-weight: 600; color: #64748b; display: block; margin-bottom: 2px;">Year (વર્ષ)</label>
-                    <select name="year" style="margin: 0; font-weight: 600; padding: 6px 12px;" onchange="this.form.submit()">
-                        <?php for ($y = date('Y') - 1; $y <= date('Y') + 1; $y++): ?>
-                            <option value="<?= $y ?>" <?= $selectedYear === $y ? 'selected' : '' ?>><?= $y ?></option>
-                        <?php endfor; ?>
-                    </select>
-                </div>
-
-                <div style="margin-top: 18px;">
-                    <button type="submit" class="btn btn-secondary btn-sm">શોધો (Filter)</button>
-                </div>
-            </form>
-
-            <div style="display: flex; gap: 8px;">
-                <a href="?view=monthly&year=<?= $selectedYear ?>&month=<?= $selectedMonth ?>&export=monthly_csv" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Export Register (CSV)
-                </a>
-                <a href="<?= url('public/staff_payroll.php?month=' . sprintf('%04d-%02d', $selectedYear, $selectedMonth)) ?>" class="btn btn-sm" style="background: #4338ca; color:#fff;">
-                    💰 Calculate Salary for <?= date('M Y', strtotime(sprintf('%04d-%02d-01', $selectedYear, $selectedMonth))) ?>
-                </a>
+    <!-- Monthly Filter Card -->
+    <div class="card" style="padding: 16px 20px;">
+        <form method="get" action="" class="filter-form">
+            <input type="hidden" name="view" value="monthly">
+            <div>
+                <label for="att_month">Month</label>
+                <select id="att_month" name="month" onchange="this.form.submit()">
+                    <?php foreach ($monthsList as $num => $mName): ?>
+                        <option value="<?= $num ?>" <?= $selectedMonth === $num ? 'selected' : '' ?>><?= $mName ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-        </div>
+            <div>
+                <label for="att_year">Year</label>
+                <select id="att_year" name="year" onchange="this.form.submit()">
+                    <?php for ($y = date('Y') - 1; $y <= date('Y') + 1; $y++): ?>
+                        <option value="<?= $y ?>" <?= $selectedYear === $y ? 'selected' : '' ?>><?= $y ?></option>
+                    <?php endfor; ?>
+                </select>
+            </div>
+        </form>
     </div>
 
-    <!-- Monthly Summary Bar -->
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
-        <div class="card" style="margin:0; padding: 14px 16px;">
-            <div style="font-size: 22px; font-weight: 800; color: #1e293b;"><?= $monthlyRegister['total_days'] ?> Days</div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">કુલ મહિનાના દિવસો (Total Calendar Days)</div>
-        </div>
-        <div class="card" style="margin:0; padding: 14px 16px;">
-            <div style="font-size: 22px; font-weight: 800; color: #16a34a;"><?= $monthlyRegister['working_days'] ?> Days</div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">કામના દિવસો (Working Days)</div>
-        </div>
-        <div class="card" style="margin:0; padding: 14px 16px;">
-            <div style="font-size: 22px; font-weight: 800; color: #6d28d9;"><?= $monthlyRegister['total_holidays'] ?> Days</div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">રજાઓ + રવિવાર (Holidays & Sundays - Paid)</div>
-        </div>
-        <div class="card" style="margin:0; padding: 14px 16px;">
-            <div style="font-size: 22px; font-weight: 800; color: #4338ca;"><?= count($monthlyRegister['matrix']) ?> Staff</div>
-            <div class="muted" style="font-size: 12px; font-weight: 600;">સક્રિય સ્ટાફ સભ્યો (Active Staff)</div>
-        </div>
+    <!-- Monthly Summary KPIs -->
+    <div class="grid grid-4" style="margin-bottom: 20px;">
+        <?= render_kpi_card('Calendar Days', $monthlyRegister['total_days'] . ' Days', $monthlyRegister['month_name'], '', 'default') ?>
+        <?= render_kpi_card('Working Days', $monthlyRegister['working_days'] . ' Days', 'Scheduled workdays', '', 'success') ?>
+        <?= render_kpi_card('Holidays & Sundays', $monthlyRegister['total_holidays'] . ' Days', 'Paid non-working days', '', 'primary') ?>
+        <?= render_kpi_card('Active Staff', count($monthlyRegister['matrix']) . ' Staff', 'Included in register', '', 'default') ?>
     </div>
 
-    <!-- Attendance Matrix Table -->
+    <!-- Attendance Matrix Card -->
     <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; font-size: 16px;">
-                Monthly Attendance Register (<?= $monthlyRegister['month_name'] ?>)
-            </h3>
-            <div style="display: flex; gap: 10px; font-size: 12px;">
+        <div class="card-header-bar">
+            <div>
+                <h2>Monthly Attendance Register</h2>
+                <p class="muted" style="margin: 2px 0 0; font-size: 12.5px;"><?= e($monthlyRegister['month_name']) ?></p>
+            </div>
+            <div class="action-group" style="font-size: 12px; color: var(--text-body); gap: 12px;">
                 <span><span class="matrix-badge mb-P">P</span> Present</span>
-                <span><span class="matrix-badge mb-HD">HD</span> Half Day (0.5)</span>
+                <span><span class="matrix-badge mb-HD">HD</span> Half Day</span>
                 <span><span class="matrix-badge mb-A">A</span> Absent</span>
                 <span><span class="matrix-badge mb-PL">PL</span> Paid Leave</span>
-                <span><span class="matrix-badge mb-H">H</span> Holiday/Sun</span>
+                <span><span class="matrix-badge mb-H">H</span> Holiday / Sun</span>
             </div>
         </div>
 
@@ -538,7 +507,7 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     <tr>
                         <th class="sticky-name">Staff Name</th>
                         <?php for ($d = 1; $d <= $monthlyRegister['total_days']; $d++): ?>
-                            <?php 
+                            <?php
                             $meta = $monthlyRegister['days_meta'][$d];
                             $colClass = $meta['is_sunday'] ? 'col-sun' : ($meta['is_declared_holiday'] ? 'col-hol' : '');
                             ?>
@@ -547,62 +516,70 @@ require_once __DIR__ . '/../includes/layout_header.php';
                                 <div style="font-size: 9.5px; opacity: 0.8;"><?= $meta['day_name'] ?></div>
                             </th>
                         <?php endfor; ?>
-                        <th style="background:#dcfce7; color:#166534; font-weight:700;">P</th>
-                        <th style="background:#fef3c7; color:#92400e; font-weight:700;">HD</th>
-                        <th style="background:#fee2e2; color:#991b1b; font-weight:700;">A</th>
-                        <th style="background:#ede9fe; color:#5b21b6; font-weight:700;">H</th>
-                        <th style="background:#e0e7ff; color:#3730a3; font-weight:800; min-width:70px;">Payable</th>
+                        <th style="background: var(--success-bg); color: #166534;">P</th>
+                        <th style="background: var(--warning-bg); color: #92400E;">HD</th>
+                        <th style="background: var(--danger-bg); color: #991B1B;">A</th>
+                        <th style="background: var(--primary-light); color: var(--primary-hover);">H</th>
+                        <th style="background: var(--primary-light); color: var(--primary-hover); min-width: 72px;">Payable</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($monthlyRegister['matrix'] as $row): ?>
-                        <?php $s = $row['summary']; ?>
+                    <?php if (empty($monthlyRegister['matrix'])): ?>
                         <tr>
-                            <td class="sticky-name">
-                                <div style="font-weight: 700; color: #0f172a;"><?= e($row['staff']['name']) ?></div>
-                                <div style="font-size: 10.5px; color: #64748b;"><?= e($row['staff']['designation']) ?></div>
-                            </td>
-                            <?php for ($d = 1; $d <= $monthlyRegister['total_days']; $d++): ?>
-                                <?php 
-                                $rec = $row['days'][$d];
-                                $meta = $monthlyRegister['days_meta'][$d];
-                                $colClass = $meta['is_sunday'] ? 'col-sun' : ($meta['is_declared_holiday'] ? 'col-hol' : '');
-                                
-                                $status = $rec['status'];
-                                $badgeClass = 'mb-unmarked';
-                                $badgeText = '-';
-
-                                if ($status === 'present') { $badgeClass = 'mb-P'; $badgeText = 'P'; }
-                                elseif ($status === 'half_day') { $badgeClass = 'mb-HD'; $badgeText = 'HD'; }
-                                elseif ($status === 'absent') { $badgeClass = 'mb-A'; $badgeText = 'A'; }
-                                elseif ($status === 'paid_leave') { $badgeClass = 'mb-PL'; $badgeText = 'PL'; }
-                                elseif ($status === 'holiday') { $badgeClass = 'mb-H'; $badgeText = 'H'; }
-                                elseif ($status === 'future') { $badgeClass = 'mb-future'; $badgeText = '·'; }
-                                ?>
-                                <td class="<?= $colClass ?>" title="<?= e($meta['date'] . ($rec['notes'] ? ': ' . $rec['notes'] : '')) ?>">
-                                    <span class="matrix-badge <?= $badgeClass ?>"><?= $badgeText ?></span>
-                                </td>
-                            <?php endfor; ?>
-                            <td style="font-weight: 700; color:#166534;"><?= $s['present'] ?></td>
-                            <td style="font-weight: 700; color:#92400e;"><?= $s['half_day'] ?></td>
-                            <td style="font-weight: 700; color:#991b1b;"><?= $s['absent'] ?></td>
-                            <td style="font-weight: 700; color:#5b21b6;"><?= $s['holiday'] ?></td>
-                            <td style="font-weight: 800; color:#3730a3; background: #e0e7ff; font-size: 12.5px;">
-                                <?= $s['payable_days'] ?>
+                            <td colspan="<?= $monthlyRegister['total_days'] + 6 ?>" style="text-align: center; padding: 36px 20px; color: var(--muted);">
+                                No active staff records found for this month.
                             </td>
                         </tr>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($monthlyRegister['matrix'] as $row): ?>
+                            <?php $s = $row['summary']; ?>
+                            <tr>
+                                <td class="sticky-name">
+                                    <div style="font-weight: 600; color: var(--text);"><?= e($row['staff']['name']) ?></div>
+                                    <div style="font-size: 11px; color: var(--muted); font-weight: 500;"><?= e($row['staff']['designation']) ?></div>
+                                </td>
+                                <?php for ($d = 1; $d <= $monthlyRegister['total_days']; $d++): ?>
+                                    <?php
+                                    $rec = $row['days'][$d];
+                                    $meta = $monthlyRegister['days_meta'][$d];
+                                    $colClass = $meta['is_sunday'] ? 'col-sun' : ($meta['is_declared_holiday'] ? 'col-hol' : '');
+
+                                    $status = $rec['status'];
+                                    $badgeClass = 'mb-unmarked';
+                                    $badgeText = '-';
+
+                                    if ($status === 'present') { $badgeClass = 'mb-P'; $badgeText = 'P'; }
+                                    elseif ($status === 'half_day') { $badgeClass = 'mb-HD'; $badgeText = 'HD'; }
+                                    elseif ($status === 'absent') { $badgeClass = 'mb-A'; $badgeText = 'A'; }
+                                    elseif ($status === 'paid_leave') { $badgeClass = 'mb-PL'; $badgeText = 'PL'; }
+                                    elseif ($status === 'holiday') { $badgeClass = 'mb-H'; $badgeText = 'H'; }
+                                    elseif ($status === 'future') { $badgeClass = 'mb-future'; $badgeText = '·'; }
+                                    ?>
+                                    <td class="<?= $colClass ?>" title="<?= e($meta['date'] . ($rec['notes'] ? ': ' . $rec['notes'] : '')) ?>">
+                                        <span class="matrix-badge <?= $badgeClass ?>"><?= $badgeText ?></span>
+                                    </td>
+                                <?php endfor; ?>
+                                <td style="font-weight: 700; color: #166534; font-variant-numeric: tabular-nums;"><?= $s['present'] ?></td>
+                                <td style="font-weight: 700; color: #92400E; font-variant-numeric: tabular-nums;"><?= $s['half_day'] ?></td>
+                                <td style="font-weight: 700; color: #991B1B; font-variant-numeric: tabular-nums;"><?= $s['absent'] ?></td>
+                                <td style="font-weight: 700; color: var(--primary-hover); font-variant-numeric: tabular-nums;"><?= $s['holiday'] ?></td>
+                                <td style="font-weight: 800; color: var(--primary-hover); background: var(--primary-light); font-size: 12.5px; font-variant-numeric: tabular-nums;">
+                                    <?= $s['payable_days'] ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
 
-        <div style="background: #f8fafc; padding: 12px 16px; border-radius: 8px; margin-top: 14px; font-size: 12.5px; color: #475569; border: 1px solid #e2e8f0;">
-            <strong>💡 રીયલ સિસ્ટમ પગાર ગણતરી નિયમ (Payroll Rules):</strong>
-            <ul style="margin: 6px 0 0 18px; padding: 0;">
-                <li><strong>સંસ્થાની રજાઓ / રવિવાર (H):</strong> સંસ્થા દ્વારા આપવામાં આવેલ રજાઓ અને રવિવાર <strong>Payable Days</strong> માં ગણાય છે (પગાર કપાતો નથી).</li>
-                <li><strong>અડધો દિવસ (HD):</strong> અડધા દિવસની હાજરીમાં માત્ર અડધા દિવસ (0.5 Day) નો જ પગાર કપાશે.</li>
-                <li><strong>ગેરહાજર (A):</strong> મંજૂરી વગરની રજા માટે પૂરા 1 દિવસનો પગાર કપાશે.</li>
-                <li><strong>Payable Days =</strong> હાજર દિવસો (P) + (અડધા દિવસો × 0.5) + રજાઓ/રવિવાર (H) + મંજૂર પેઇડ રજાઓ (PL).</li>
+        <div class="rules-callout">
+            <strong>Payroll Calculation Rules</strong>
+            <ul>
+                <li><strong>Holidays &amp; Sundays (H):</strong> Declared institute holidays and Sundays are included in <strong>Payable Days</strong> with zero deduction.</li>
+                <li><strong>Half Day (HD):</strong> Counts as 0.5 payable day (half-day deduction applies).</li>
+                <li><strong>Absent (A):</strong> Unpaid absence deducts 1 full day from payable days.</li>
+                <li><strong>Formula:</strong> <code>Payable Days = P + (HD &times; 0.5) + H + PL</code>.</li>
             </ul>
         </div>
     </div>

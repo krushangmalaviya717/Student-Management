@@ -1,7 +1,7 @@
 <?php
 /**
  * UI Component: Status Badge
- * Standardized status badges with bilingual English + Gujarati labels.
+ * Standardized status badges in clean English.
  */
 
 if (!function_exists('render_status_badge')) {
@@ -10,91 +10,55 @@ if (!function_exists('render_status_badge')) {
         $status = strtolower(trim($status));
         $config = [
             'active' => [
-                'label' => 'Active (ચાલુ)',
-                'class' => 'badge-active',
-                'bg' => '#ecfdf5',
-                'text' => '#065f46',
-                'border' => '#a7f3d0'
+                'label' => 'Active',
+                'class' => 'badge-active badge-green',
             ],
             'extended' => [
-                'label' => 'Extended (મુદત લંબાવેલ)',
-                'class' => 'badge-extended',
-                'bg' => '#fffbeb',
-                'text' => '#92400e',
-                'border' => '#fde68a'
+                'label' => 'Extended',
+                'class' => 'badge-extended badge-amber',
             ],
             'paused' => [
-                'label' => 'On Hold (સ્ટોપ / મોકૂફ)',
-                'class' => 'badge-paused',
-                'bg' => '#fef3c7',
-                'text' => '#b45309',
-                'border' => '#fcd34d'
+                'label' => 'On Hold',
+                'class' => 'badge-paused badge-amber',
             ],
             'course_completed' => [
-                'label' => 'Completed (કોર્સ પૂર્ણ)',
-                'class' => 'badge-completed',
-                'bg' => '#eff6ff',
-                'text' => '#1e40af',
-                'border' => '#bfdbfe'
+                'label' => 'Completed',
+                'class' => 'badge-completed badge-blue',
             ],
             'waiting_ready' => [
-                'label' => 'Waiting: Ready (તૈયાર)',
-                'class' => 'badge-waiting-ready',
-                'bg' => '#f0fdf4',
-                'text' => '#166534',
-                'border' => '#bbf7d0'
+                'label' => 'Waiting: Ready',
+                'class' => 'badge-waiting-ready badge-green',
             ],
             'waiting_future_date' => [
                 'label' => 'Waiting: Future Date',
-                'class' => 'badge-waiting',
-                'bg' => '#fef3c7',
-                'text' => '#78350f',
-                'border' => '#fde68a'
+                'class' => 'badge-waiting badge-amber',
             ],
             'waiting_date_not_confirmed' => [
                 'label' => 'Waiting: Date Pending',
-                'class' => 'badge-waiting',
-                'bg' => '#f3f4f6',
-                'text' => '#374151',
-                'border' => '#e5e7eb'
+                'class' => 'badge-waiting badge-gray',
             ],
             'joining_confirmed' => [
                 'label' => 'Joining Confirmed',
-                'class' => 'badge-joining',
-                'bg' => '#ecfdf5',
-                'text' => '#047857',
-                'border' => '#a7f3d0'
+                'class' => 'badge-joining badge-green',
             ],
             'cancelled' => [
-                'label' => 'Cancelled (રદ કરેલ)',
-                'class' => 'badge-cancelled',
-                'bg' => '#fef2f2',
-                'text' => '#991b1b',
-                'border' => '#fecaca'
+                'label' => 'Cancelled',
+                'class' => 'badge-cancelled badge-red',
             ],
             'inactive' => [
-                'label' => 'Inactive (નિષ્ક્રિય)',
-                'class' => 'badge-inactive',
-                'bg' => '#f3f4f6',
-                'text' => '#4b5563',
-                'border' => '#e5e7eb'
-            ]
+                'label' => 'Inactive',
+                'class' => 'badge-inactive badge-gray',
+            ],
         ];
 
         $badge = $config[$status] ?? [
             'label' => ucfirst(str_replace('_', ' ', $status)),
-            'class' => 'badge-default',
-            'bg' => '#f3f4f6',
-            'text' => '#374151',
-            'border' => '#d1d5db'
+            'class' => 'badge-default badge-gray',
         ];
 
         return sprintf(
-            '<span class="badge %s" style="background:%s;color:%s;border:1px solid %s;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;display:inline-block;">%s</span>',
+            '<span class="badge %s">%s</span>',
             htmlspecialchars($badge['class']),
-            $badge['bg'],
-            $badge['text'],
-            $badge['border'],
             htmlspecialchars($badge['label'])
         );
     }

@@ -29,15 +29,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="login-wrap">
   <div class="login-card">
     <h1>Devangi Sewing Classes</h1>
-    <p>Student Management System</p>
+    <p>Sign in to access the Student Management Admin Panel.</p>
     <?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
     <form method="post">
         <?= csrf_field() ?>
-        <label>Email</label>
-        <input type="email" name="email" required autofocus value="<?= e($_POST['email'] ?? '') ?>">
-        <label>Password</label>
-        <input type="password" name="password" required>
-        <button type="submit" class="btn" style="width:100%;margin-top:20px;">Log In</button>
+        <div class="form-group">
+            <label for="login_email">Email</label>
+            <input type="email" id="login_email" name="email" required autofocus value="<?= e($_POST['email'] ?? '') ?>" placeholder="admin@example.com">
+        </div>
+        <div class="form-group">
+            <label for="login_password">Password</label>
+            <input type="password" id="login_password" name="password" required placeholder="Enter your password">
+        </div>
+        <button type="submit" class="btn btn-block" style="margin-top: 6px;">Log In</button>
     </form>
   </div>
 </div>

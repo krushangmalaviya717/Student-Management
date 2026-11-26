@@ -27,7 +27,7 @@ if (!$s) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>દેવાંગી સીવણ ક્લાસીસ - Premium Admission Form & Rules</title>
+  <title>Devangi Sewing Classes - Admission Form &amp; Rules</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anek+Gujarati:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -94,35 +94,58 @@ body {
 
 .print-bar-title {
   font-weight: 700;
-  font-size: 15px;
-  color: #F7E7EB;
+  font-size: 14.5px;
+  color: #FFFFFF;
 }
 
 .print-bar-desc {
   font-size: 12px;
-  color: #BDB5B7;
+  color: #94A3B8;
+}
+
+.print-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-back-screen {
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.btn-back-screen:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .btn-print {
-  background: linear-gradient(135deg, var(--primary-rose) 0%, var(--dark-rose) 100%);
-  color: var(--white);
-  border: 1px solid var(--gold-accent);
-  padding: 9px 20px;
-  border-radius: 25px;
-  font-size: 14px;
-  font-weight: 700;
+  background: #4F46E5;
+  color: #FFFFFF;
+  border: 1px solid transparent;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  box-shadow: 0 3px 12px rgba(184, 123, 134, 0.4);
+  gap: 7px;
+  transition: background 0.15s ease;
 }
 
 .btn-print:hover {
-  transform: translateY(-1.5px);
-  box-shadow: 0 5px 16px rgba(184, 123, 134, 0.6);
-  background: linear-gradient(135deg, #C78A95 0%, var(--primary-rose) 100%);
+  background: #4338CA;
 }
 
 /* Page Outer Wrapper for Preview */
@@ -879,17 +902,20 @@ body {
   <div class="no-print print-action-bar">
     <div class="print-bar-content">
       <div class="print-bar-info">
-        <span class="print-bar-title">દેવાંગી સીવણ ક્લાસીસ — Premium Admission Form</span>
-        <span class="print-bar-desc">A4 Print Ready (White Background with Premium Inset Frame)</span>
+        <span class="print-bar-title">Devangi Sewing Classes &mdash; Admission Form</span>
+        <span class="print-bar-desc">A4 Print-Ready Admission Form &amp; Rules Sheet</span>
       </div>
-      <button onclick="window.print()" class="btn-print">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 6 2 18 2 18 9"></polyline>
-          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-          <rect x="6" y="14" width="12" height="8"></rect>
-        </svg>
-        પ્રિન્ટ કરો (Print Form)
-      </button>
+      <div class="print-bar-actions">
+        <a href="javascript:history.back()" class="btn-back-screen">&larr; Back</a>
+        <button onclick="window.print()" class="btn-print">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          Print Form
+        </button>
+      </div>
     </div>
   </div>
 

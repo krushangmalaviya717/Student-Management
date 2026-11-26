@@ -20,12 +20,12 @@ class ApiAuth
             return current_user();
         }
 
-        // Option 2: Bearer Token or API Key
+        // Option 2: Bearer Token or X-API-Key Header only (never URL query string)
         $token = self::getBearerToken();
-        $apiKey = $token ?? $_GET['api_key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? null;
+        $apiKey = $token ?? ($_SERVER['HTTP_X_API_KEY'] ?? null);
         $configuredKey = defined('API_SECRET_KEY') ? API_SECRET_KEY : '';
 
-        if (!empty($configuredKey) && !empty($apiKey) && hash_equals($configuredKey, $apiKey)) {
+        if (!empty($configuredKey) && !empty($apiKey) && hash_equals($configuredKey, (string)$apiKey)) {
             return [
                 'id' => 1,
                 'name' => 'API Client',

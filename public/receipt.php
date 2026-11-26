@@ -24,7 +24,7 @@ $receiptNo = trim($_GET['receipt_no'] ?? '');
 
 if ($paymentId > 0) {
     $stmt = $pdo->prepare(
-        "SELECT p.*, s.name AS student_name, s.registration_no, s.form_no, s.student_mobile, s.address,
+        "SELECT p.*, s.name AS student_name, s.registration_no, s.form_no, s.student_mobile, s.address, s.is_temporary,
                 b.name AS batch_name, u.name AS collector_name
          FROM payments p
          JOIN students s ON s.id = p.student_id
@@ -35,7 +35,7 @@ if ($paymentId > 0) {
     $stmt->execute([$paymentId]);
 } elseif ($receiptNo !== '') {
     $stmt = $pdo->prepare(
-        "SELECT p.*, s.name AS student_name, s.registration_no, s.form_no, s.student_mobile, s.address,
+        "SELECT p.*, s.name AS student_name, s.registration_no, s.form_no, s.student_mobile, s.address, s.is_temporary,
                 b.name AS batch_name, u.name AS collector_name
          FROM payments p
          JOIN students s ON s.id = p.student_id
@@ -114,6 +114,16 @@ $stageKey = $payment['stage'] ?? '';
 $stageTitle = $stageLabels[$stageKey] ?? ucwords(str_replace('_', ' ', $stageKey));
 $stageDesc = $stageDescriptions[$stageKey] ?? '';
 
+// If custom notes/particulars are provided (e.g. manual/temporary receipt), display appropriately
+if (!empty($payment['notes'])) {
+    if ($stageKey === 'other' || !isset($stageLabels[$stageKey])) {
+        $stageTitle = $payment['notes'];
+        $stageDesc = '';
+    } else {
+        $stageDesc = $payment['notes'];
+    }
+}
+
 $businessName = get_setting('business_name', 'DEVANGI SEWING CLASSES');
 
 /**
@@ -175,15 +185,15 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
                 </div>
                 <div class="meta-row">
                     <span class="meta-lbl">Registration No:</span>
-                    <span class="meta-val font-mono fw-bold"><?= e($payment['registration_no'] ?: 'Pending Confirmation') ?></span>
+                    <span class="meta-val font-mono fw-bold"><?= e($payment['registration_no'] ?: (!empty($payment['is_temporary']) ? 'Temporary Record' : 'Pending Confirmation')) ?></span>
                 </div>
                 <div class="meta-row">
                     <span class="meta-lbl">Form Number:</span>
-                    <span class="meta-val font-mono"><?= e($payment['form_no'] ?: 'N/A') ?></span>
+                    <span class="meta-val font-mono"><?= e($payment['form_no'] ?: (!empty($payment['is_temporary']) ? 'Manual Entry' : 'N/A')) ?></span>
                 </div>
                 <div class="meta-row">
                     <span class="meta-lbl">Assigned Batch:</span>
-                    <span class="meta-val"><?= e($payment['batch_name'] ?: 'Not Assigned / Any') ?></span>
+                    <span class="meta-val"><?= e($payment['batch_name'] ?: (!empty($payment['is_temporary']) ? 'Walk-in / Temporary' : 'Not Assigned / Any')) ?></span>
                 </div>
                 <div class="meta-row">
                     <span class="meta-lbl">Student Mobile:</span>
@@ -288,14 +298,15 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 8px 16px;
-        font-size: 13px;
-        font-weight: 500;
+        height: 36px;
+        padding: 0 16px;
+        font-size: 13.5px;
+        font-weight: 600;
         border-radius: 6px;
         cursor: pointer;
         text-decoration: none;
         border: 1px solid transparent;
-        transition: background-color 0.15s ease;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
     }
     .btn-secondary {
         background: #ffffff;
@@ -307,11 +318,19 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
         border-color: #94a3b8;
     }
     .btn-primary {
-        background: #0f172a;
+        background: #4f46e5;
         color: #ffffff;
     }
     .btn-primary:hover {
-        background: #1e293b;
+        background: #4338ca;
+    }
+    @media screen and (max-width: 640px) {
+        .meta-grid { grid-template-columns: 1fr; }
+        .receipt-header { flex-direction: column; gap: 10px; }
+        .header-right { align-items: flex-start; text-align: left; }
+        .receipt-footer { flex-direction: column; align-items: flex-start; gap: 16px; }
+        .sign-col { text-align: left; width: 100%; }
+        .sign-line.ml-auto { margin-left: 0; }
     }
 
     /* Sheet Container on Screen */
@@ -756,6 +775,14 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
     <!-- 2. OFFICE COPY (Bottom Half of A4) -->
     <?php render_receipt_card($payment, 'OFFICE COPY', $stageTitle, $stageDesc, $businessName); ?>
 </div>
+
+<?php if (!empty($_GET['print']) || !empty($_GET['autoprint'])): ?>
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { window.print(); }, 400);
+});
+</script>
+<?php endif; ?>
 
 </body>
 </html>

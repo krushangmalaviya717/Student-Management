@@ -220,17 +220,37 @@ if ($invoice['extension_id']) {
         align-items: center;
     }
     .btn {
-        background: #0f172a;
-        color: #fff;
-        border: none;
-        padding: 8px 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 36px;
+        background: #4f46e5;
+        color: #ffffff;
+        border: 1px solid transparent;
+        padding: 0 16px;
         border-radius: 6px;
         cursor: pointer;
         text-decoration: none;
-        font-size: 14px;
-        font-weight: 500;
+        font-size: 13.5px;
+        font-weight: 600;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
     }
-    .btn-secondary { background: #e2e8f0; color: #1e293b; }
+    .btn:hover { background: #4338ca; }
+    .btn-secondary {
+        background: #ffffff;
+        color: #334155;
+        border-color: #cbd5e1;
+    }
+    .btn-secondary:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+    @media screen and (max-width: 640px) {
+        .invoice-container { padding: 20px; }
+        .header { flex-direction: column; gap: 12px; }
+        .invoice-meta { text-align: left; }
+        .info-grid, .footer-signatures { grid-template-columns: 1fr; }
+    }
     @media print {
         body { background: #fff; padding: 0; }
         .invoice-container { box-shadow: none; border: 1.5px solid #000; padding: 20px 30px; }
