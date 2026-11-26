@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS settings (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     setting_key VARCHAR(100) NOT NULL UNIQUE,
-    setting_value VARCHAR(500) NOT NULL,
+    setting_value TEXT NOT NULL,
     setting_group VARCHAR(50) DEFAULT 'general',  -- fees, course, batch, numbering...
     description VARCHAR(255) DEFAULT NULL,
     updated_by INT UNSIGNED DEFAULT NULL,
@@ -464,7 +464,34 @@ INSERT IGNORE INTO settings (setting_key, setting_value, setting_group, descript
 ('registration_no_prefix', 'DSC-R-', 'numbering', 'Prefix for auto-generated Registration Numbers'),
 ('receipt_no_prefix', 'DSC-RCPT-', 'numbering', 'Prefix for payment receipt numbers'),
 ('invoice_no_prefix', 'DSC-INV-', 'numbering', 'Prefix for extension invoice numbers'),
-('default_batch_capacity', '8', 'batch', 'Default maximum active students per batch');
+('default_batch_capacity', '8', 'batch', 'Default maximum active students per batch'),
+('form_req_student_mobile', '1', 'form_fields', 'Require Student Mobile in admission/edit forms'),
+('form_req_father_mobile', '0', 'form_fields', 'Require Husband/Father Mobile'),
+('form_req_home_mobile', '0', 'form_fields', 'Require Home Mobile'),
+('form_req_age', '0', 'form_fields', 'Require Student Age'),
+('form_req_education', '0', 'form_fields', 'Require Education'),
+('form_req_address', '1', 'form_fields', 'Require Full Address'),
+('form_req_photo', '1', 'form_fields', 'Require Student Passport Photo'),
+('form_req_knows_sewing', '0', 'form_fields', 'Require Sewing Experience Answer'),
+('form_req_hear_about_us', '0', 'form_fields', 'Require Hear About Us Source'),
+('form_req_referral', '0', 'form_fields', 'Require Referral Details'),
+('form_req_guardian', '0', 'form_fields', 'Require Guardian Name & Relation'),
+('form_vis_father_mobile', '1', 'form_fields', 'Show Husband/Father Mobile field'),
+('form_vis_home_mobile', '1', 'form_fields', 'Show Home Mobile field'),
+('form_vis_age', '1', 'form_fields', 'Show Age field'),
+('form_vis_education', '1', 'form_fields', 'Show Education field'),
+('form_vis_address', '1', 'form_fields', 'Show Full Address field'),
+('form_vis_photo', '1', 'form_fields', 'Show Passport Photo upload'),
+('form_vis_knows_sewing', '1', 'form_fields', 'Show Sewing Experience section'),
+('form_vis_hear_about_us', '1', 'form_fields', 'Show Hear About Us section'),
+('form_vis_referral', '1', 'form_fields', 'Show Referral Details section'),
+('form_vis_guardian', '1', 'form_fields', 'Show Guardian Details section'),
+('institute_tagline', 'Stitching & Fashion Designing Training Institute', 'branding', 'Displayed below institute name on printouts'),
+('institute_phone', '', 'branding', 'Contact phone number displayed on receipts/forms'),
+('institute_address', '', 'branding', 'Institute address displayed on receipts/forms'),
+('receipt_terms_text', '• Form confirmation fee is non-refundable upon cancellation.\n• Official computer-generated receipt for institutional records.', 'branding', 'Terms printed at bottom of fee receipts'),
+('admission_rules_text', 'ફોર્મ ભરતી વખતે ભરેલી રકમ કોઈપણ સંજોગો નામ કેન્સલ થાય તો પરત મળશે નહીં.\nજે વ્યક્તિના નામ નું ફોર્મ ભરેલું હશે તે જ વ્યક્તિએ આવવાનું રહેશે.\nજો કોઈપણ સંજોગોમાં નામ ચેન્જ કરવાનું થાય તો પણ ફોર્મ અને ફોર્મની રકમ ફરીથી ભરવાની રહેશે પણ જે વ્યક્તિની જગ્યાએ તેના સ્થાન મળી શકશે તેને વેઈટીંગ માં રહેવું પડશે નહીં. પણ કેન્સલ કરાવ્યા પછી તે સ્થાન કોઈપણ વ્યક્તિને મળશે નહીં.\nએન્ટ્રી કર્યા ના પહેલા જ દિવસે એન્ટ્રી ફી ફરજીયાત આપવાની રહેશે.\nએન્ટ્રી કર્યા પછી જો આવવાનું બંધ કરવામાં આવે તો એન્ટ્રીમાં ભરેલી ફી પરત આપવામાં આવશે નહીં.\nફીની બાકીની રકમ દસ દિવસમાં આપવાની રહેશે દસ દિવસ પછી જો આવવાનું બંધ કરવામાં આવે તો ભરેલી કોઈપણ રકમ પરત આપવામાં આવશે નહીં.\nકોઈપણ વહીવટ કરવા જે તે વ્યક્તિ નું ફોર્મ હોય તેને રૂબરૂ આવવાનું રહેશે બીજી કોઈ પણ વ્યક્તિનું સાંભળવામાં આવશે નહીં.\nવારો આવ્યા નો ફોન આવે જે તે વ્યક્તિએ આવવાની હા પાડ્યા પછી તે દિવસે ન આવે તો તે દિવસ તેનામાં ગણવામાં આવશે તેમ જો બે દિવસ ન આવે તો તેનું ફોર્મ રદ કરવામાં આવશે પછી તેણે ફરીથી ફોર્મ અને ફોર્મની રકમ ભરવાની રહેશે તેમજ વેઈટીંગમાં રહેવાનું રહેશે.\nવારો આવ્યા પછી એકવાર લેટ કરાવી શકાશે પરંતુ બીજીવાર વારો આવે એટલે ફરજીયાત આવવાનું રહેશે. અને જો ત્યારે પણ ન આવે તો ફોર્મ કેન્સલ કરવામાં આવશે તથા ભરેલી ફોર્મની રકમ પરત કરવામાં આવશે નહીં.\n16 વર્ષ થી નીચેની તેમજ 45 વર્ષથી ઉપરની બહેનોને શીખવવામાં આવશે નહીં.\nજે-તે વ્યક્તિનો ફોન નંબર આપ્યો હોય અને તે વ્યક્તિ ફોન પર જ નામ કેન્સલ કરાવી નાખશે તો પણ નામ કેન્સલ થઈ જશે પછી કોઈ તકરાર કરવી નહીં.\nજો કોઈ અગમ્ય કારણસર વચ્ચે અટકા વવાની ફરજ પડે તો તેની જાણ કર્યા ના ત્રીજા દિવસથી એના બાકી બચતા દિવસ ને 1.5 મહિના પછી આપવામાં આવશે પરંતુ ભરેલી રકમ પરત આપવામાં આવશે નહીં.\nશીખવા માટે ફૂલ સાઇઝ નું કાપડ લાવવાનું રહેશે. ટુકડામાં કાપડ ચાલશે નહીં.\nપહેલા બે જોડી ડ્રેસમાં મોટી સાઈઝ નું માપ જ ચાલશે નાની સાઈઝ નું માપ લાવવું નહીં.\nબેન્ચ શરૂ થાય ત્યારે સમયસર આવવું અને બેન્ચ પૂરી થાય ત્યારે તરત જ મશીન ખાલી કરવાનું રહેશે.\nદર રવિવારે રજા રહેશે રવિવાર સાથે જ 45 દિવસ ગણવામાં આવશે.\nતમારી કોઈ પણ કારણે પાડેલી રજા પરત આપવામાં આવશે નહીં.\nઅમારા પર્સનલ કારણસર કે તહેવાર નિમિત્તે પાડેલી રજા અમારે આપવાની રહેશે.\n45 દિવસ ઉપર એક પણ દિવસ આપવામાં આવશે નહીં વધારે દિવસ ભરવાની ફી અલગથી આપવાની રહેશે.\nલેડીસ ટેલર્સ ના કામ સિવાય નું બીજું કાંઈ પણ કામ શીખવવામાં આવશે નહીં.\nદરેક કપડા બોડી મેજરમેન્ટ થી શીખવવામાં આવશે.\nક્લાસ ની કોઈ સ્પેશિયલ વસ્તુ એકસ્ટ્રા બેન્ચ તેમજ એકસ્ટ્રા ફી ચૂકવીને શીખવવાની રહેશે તે રેગ્યુલર બેન્ચમાં શીખવવામાં આવશે નહીં તેમજ તે જૂના સ્ટુડન્ટ માટે જ રહેશે.\nબીજાને સિલાઈકામ શીખવાડતા હોય તેવા વ્યક્તિએ ક્લાસમાં શીખવા આવવું નહીં તો પણ ગેરકાયદેસર રીતે એન્ટ્રી કરશે અને પકડાઈ જશે તો તેની ભરેલી ફી પરત મળશે નહીં અને તેને જાણ થાય ત્યારથી જ ક્લાસ માંથી કાઢી મુકવામાં આવશે.\nસીવણ ક્લાસ માં ઑડિયો તેમજ વિડીયો રેકોર્ડીંગ કરવું નહીં.\nક્લાસમાં શીખ્યા પછી કોઈ કલાસીસ ચાલુ કરે તો તેને સીવણ ક્લાસમાં કંઈ પણ પૂછવા આવવાનો હક રહેશે નહીં.', 'branding', 'Rules printed on Page 2 of Admission Form (1 rule per line)'),
+('admission_caution_text', 'ફોર્મ વ્યવસ્થિત વાંચીને સમજી વિચારીને ભરવું પછી તેના નિયમ વિરુદ્ધ કંઈપણ સાંભળવામાં આવશે નહીં.', 'branding', 'Caution banner text at bottom of Admission Form rules');
 
 INSERT IGNORE INTO extension_charge_rates (per_day_charge, effective_from, status, created_by) VALUES
 (150.00, CURDATE(), 'active', 1);

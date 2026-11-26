@@ -21,13 +21,22 @@ $s = $stmt->fetch();
 if (!$s) {
     die('Student record not found.');
 }
+
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
+$instituteTagline = get_setting('institute_tagline', 'ACADEMY OF SEWING & FASHION DESIGN');
+$institutePhone = trim((string)get_setting('institute_phone', ''));
+$instituteAddress = trim((string)get_setting('institute_address', ''));
+$photoReq = get_setting('form_req_photo', '1') === '1';
+$cautionText = get_setting('admission_caution_text', 'ફોર્મ વ્યવસ્થિત વાંચીને સમજી વિચારીને ભરવું પછી તેના નિયમ વિરુદ્ધ કંઈપણ સાંભળવામાં આવશે નહીં.');
+$rulesRaw = (string)get_setting('admission_rules_text', '');
+$rulesList = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $rulesRaw))));
 ?>
 <!DOCTYPE html>
 <html lang="gu">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Devangi Sewing Classes - Admission Form &amp; Rules</title>
+  <title><?= e($businessName) ?> - Admission Form &amp; Rules</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anek+Gujarati:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -902,7 +911,7 @@ body {
   <div class="no-print print-action-bar">
     <div class="print-bar-content">
       <div class="print-bar-info">
-        <span class="print-bar-title">Devangi Sewing Classes &mdash; Admission Form</span>
+        <span class="print-bar-title"><?= e($businessName) ?> &mdash; Admission Form</span>
         <span class="print-bar-desc">A4 Print-Ready Admission Form &amp; Rules Sheet</span>
       </div>
       <div class="print-bar-actions">
@@ -936,8 +945,11 @@ body {
           <!-- Main Title -->
           <div class="brand-center-content" style="margin-bottom: 25px; margin-top: 20px;">
             <div class="brand-title-wrap">
-              <h1>DEVANGI SEWING CLASSES</h1>
-              <div class="brand-tagline">ACADEMY OF SEWING &amp; FASHION DESIGN</div>
+              <h1><?= e(strtoupper($businessName)) ?></h1>
+              <div class="brand-tagline"><?= e(strtoupper($instituteTagline)) ?></div>
+              <?php if ($institutePhone !== '' || $instituteAddress !== ''): ?>
+                <div style="font-size: 10.5px; color: var(--secondary-text); margin-top: 2px;"><?= e(implode(' | ', array_filter([$institutePhone, $instituteAddress]))) ?></div>
+              <?php endif; ?>
             </div>
           </div>
 
@@ -1062,7 +1074,11 @@ body {
                     <circle cx="12" cy="7" r="4"/>
                   </svg>
                   <div class="photo-notice-text">
-                    ફોટો<br>ફરજીયાત<br>રહેશે.
+                    <?php if ($photoReq): ?>
+                      ફોટો<br>ફરજીયાત<br>રહેશે.
+                    <?php else: ?>
+                      ફોટો<br>(Photo)
+                    <?php endif; ?>
                   </div>
                 <?php endif; ?>
               </div>
@@ -1215,113 +1231,20 @@ body {
               <div class="rules-subtitle">TERMS &amp; CONDITIONS</div>
             </div>
 
-            <!-- Single Column 25 Uniform Rules Stack -->
+            <!-- Dynamic Rules Stack -->
             <div class="rules-wrapper">
-              <div class="rule-row-card">
-                <span class="rule-num">1.</span>
-                <span class="rule-body">ફોર્મ ભરતી વખતે ભરેલી રકમ કોઈપણ સંજોગો નામ કેન્સલ થાય તો પરત મળશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">2.</span>
-                <span class="rule-body">જે વ્યક્તિના નામ નું ફોર્મ ભરેલું હશે તે જ વ્યક્તિએ આવવાનું રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">3.</span>
-                <span class="rule-body">જો કોઈપણ સંજોગોમાં નામ ચેન્જ કરવાનું થાય તો પણ ફોર્મ અને ફોર્મની રકમ ફરીથી ભરવાની રહેશે પણ જે વ્યક્તિની જગ્યાએ તેના સ્થાન મળી શકશે તેને વેઈટીંગ માં રહેવું પડશે નહીં. પણ કેન્સલ કરાવ્યા પછી તે સ્થાન કોઈપણ વ્યક્તિને મળશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">4.</span>
-                <span class="rule-body">એન્ટ્રી કર્યા ના પહેલા જ દિવસે એન્ટ્રી ફી ફરજીયાત આપવાની રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">5.</span>
-                <span class="rule-body">એન્ટ્રી કર્યા પછી જો આવવાનું બંધ કરવામાં આવે તો એન્ટ્રીમાં ભરેલી ફી પરત આપવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">6.</span>
-                <span class="rule-body">ફીની બાકીની રકમ દસ દિવસમાં આપવાની રહેશે દસ દિવસ પછી જો આવવાનું બંધ કરવામાં આવે તો ભરેલી કોઈપણ રકમ પરત આપવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">7.</span>
-                <span class="rule-body">કોઈપણ વહીવટ કરવા જે તે વ્યક્તિ નું ફોર્મ હોય તેને રૂબરૂ આવવાનું રહેશે બીજી કોઈ પણ વ્યક્તિનું સાંભળવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">8.</span>
-                <span class="rule-body">વાારો આવ્યા નો ફોન આવે જે તે વ્યક્તિએ આવવાની હા પાડ્યા પછી તે દિવસે ન આવે તો તે દિવસ તેનામાં ગણવામાં આવશે તેમ જો બે દિવસ ન આવે તો તેનું ફોર્મ રદ કરવામાં આવશે પછી તેણે ફરીથી ફોર્મ અને ફોર્મની રકમ ભરવાની રહેશે તેમજ વેઈટીંગમાં રહેવાનું રહેશે</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">9.</span>
-                <span class="rule-body">વાારો આવ્યા પછી એકવાર લેટ કરાવી શકાશે પરંતુ બીજીવાર વારો આવે એટલે ફરજીયાત આવવાનું રહેશે. અને જો ત્યારે પણ ન આવે તો ફોર્મ કેન્સલ કરવામાં આવશે તથા ભરેલી ફોર્મની રકમ પરત કરવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">10.</span>
-                <span class="rule-body">16 વર્ષ થી નીચેની તેમજ 45 વર્ષથી ઉપરની બહેનોને શીખવવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">11.</span>
-                <span class="rule-body">જે-તે વ્યક્તિનો ફોન નંબર આપ્યો હોય અને તે વ્યક્તિ ફોન પર જ નામ કેન્સલ કરાવી નાખશે તો પણ નામ કેન્સલ થઈ જશે પછી કોઈ તકરાર કરવી નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">12.</span>
-                <span class="rule-body">જો કોઈ અગમ્ય કારણસર વચ્ચે અટકા વવાની ફરજ પડે તો તેની જાણ કર્યા ના ત્રીજા દિવસથી એના બાકી બચતા દિવસ ને 1.5 મહિના પછી આપવામાં આવશે પરંતુ ભરેલી રકમ પરત આપવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">13.</span>
-                <span class="rule-body">શીખવા માટે ફૂલ સાઇઝ નું કાપડ લાવવાનું રહેશે. ટુકડામાં કાપડ ચાલશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">14.</span>
-                <span class="rule-body">પહેલા બે જોડી ડ્રેસમાં મોટી સાઈઝ નું માપ જ ચાલશે નાની સાઈઝ નું માપ લાવવું નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">15.</span>
-                <span class="rule-body">બેન્ચ શરૂ થાય ત્યારે સમયસર આવવું અને બેન્ચ પૂરી થાય ત્યારે તરત જ મશીન ખાલી કરવાનું રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">16.</span>
-                <span class="rule-body">દર રવિવારે રજા રહેશે રવિવાર સાથે જ 45 દિવસ ગણવામાં આવશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">17.</span>
-                <span class="rule-body">તમારી કોઈ પણ કારણે પાડેલી રજા પરત આપવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">18.</span>
-                <span class="rule-body">અમારા પર્સનલ કારણસર કે તહેવાર નિમિત્તે પાડેલી રજા અમારે આપવાની રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">19.</span>
-                <span class="rule-body">45 દિવસ ઉપર એક પણ દિવસ આપવામાં આવશે નહીં વધારે દિવસ ભરવાની ફી અલગથી આપવાની રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">20.</span>
-                <span class="rule-body">લેડીસ ટેલર્સ ના કામ સિવાય નું બીજું કાંઈ પણ કામ શીખવવામાં આવશે નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">21.</span>
-                <span class="rule-body">દરેક કપડા બોડી મેજરમેન્ટ થી શીખવવામાં આવશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">22.</span>
-                <span class="rule-body">ક્લાસ ની કોઈ સ્પેશિયલ વસ્તુ એકસ્ટ્રા બેન્ચ તેમજ એકસ્ટ્રા ફી ચૂકવીને શીખવવાની રહેશે તે રેગ્યુલર બેન્ચમાં શીખવવામાં આવશે નહીં તેમજ તે જૂના સ્ટુડન્ટ માટે જ રહેશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">23.</span>
-                <span class="rule-body">બીજાને સિલાઈકામ શીખવાડતા હોય તેવા વ્યક્તિએ ક્લાસમાં શીખવા આવવું નહીં તો પણ ગેરકાયદેસર રીતે એન્ટ્રી કરશે અને પકડાઈ જશે તો તેની ભરેલી ફી પરત મળશે નહીં અને તેને જાણ થાય ત્યારથી જ ક્લાસ માંથી કાઢી મુકવામાં આવશે.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">24.</span>
-                <span class="rule-body">સીવણ ક્લાસ માં ઑડિયો તેમજ વિડીયો રેકોર્ડીંગ કરવું નહીં.</span>
-              </div>
-              <div class="rule-row-card">
-                <span class="rule-num">25.</span>
-                <span class="rule-body">ક્લાસમાં શીખ્યા પછી કોઈ કલાસીસ ચાલુ કરે તો તેને સીવણ ક્લાસમાં કંઈ પણ પૂછવા આવવાનો હક રહેશે નહીં.</span>
-              </div>
+              <?php foreach ($rulesList as $idx => $ruleText): ?>
+                <?php $cleanRule = preg_replace('/^\d+\.\s*/u', '', $ruleText); ?>
+                <div class="rule-row-card">
+                  <span class="rule-num"><?= ($idx + 1) ?>.</span>
+                  <span class="rule-body"><?= e($cleanRule) ?></span>
+                </div>
+              <?php endforeach; ?>
             </div>
 
             <!-- Caution Notice Banner -->
             <div class="caution-pill-banner">
-              <span>ફોર્મ વ્યવસ્થિત વાંચીને સમજી વિચારીને ભરવું પછી તેના નિયમ વિરુદ્ધ કંઈપણ સાંભળવામાં આવશે નહીં.</span>
+              <span><?= e($cautionText) ?></span>
             </div>
           </div>
 

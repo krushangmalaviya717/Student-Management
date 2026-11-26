@@ -124,12 +124,17 @@ if (!empty($payment['notes'])) {
     }
 }
 
-$businessName = get_setting('business_name', 'DEVANGI SEWING CLASSES');
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
+$instituteTagline = get_setting('institute_tagline', 'Stitching & Fashion Designing Training Institute');
+$institutePhone = trim((string)get_setting('institute_phone', ''));
+$instituteAddress = trim((string)get_setting('institute_address', ''));
+$receiptTermsRaw = (string)get_setting('receipt_terms_text', "• Form confirmation fee is non-refundable upon cancellation.\n• Official computer-generated receipt for institutional records.");
+$receiptTermsLines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $receiptTermsRaw))));
 
 /**
  * Reusable function to render a minimal receipt card
  */
-function render_receipt_card(array $payment, string $copyType, string $stageTitle, string $stageDesc, string $businessName): void
+function render_receipt_card(array $payment, string $copyType, string $stageTitle, string $stageDesc, string $businessName, string $instituteTagline = '', string $institutePhone = '', string $instituteAddress = '', array $receiptTermsLines = []): void
 {
     $isStudent = ($copyType === 'STUDENT COPY');
     $badgeClass = $isStudent ? 'badge-student' : 'badge-office';
@@ -140,7 +145,14 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
         <div class="receipt-header">
             <div class="header-left">
                 <h1 class="inst-title"><?= e($businessName) ?></h1>
-                <p class="inst-tagline">Stitching &amp; Fashion Designing Training Institute</p>
+                <?php if ($instituteTagline !== ''): ?>
+                    <p class="inst-tagline"><?= e($instituteTagline) ?></p>
+                <?php endif; ?>
+                <?php if ($institutePhone !== '' || $instituteAddress !== ''): ?>
+                    <p class="inst-tagline" style="font-size: 11px; margin-top: 2px;">
+                        <?= e(implode(' | ', array_filter([$institutePhone, $instituteAddress]))) ?>
+                    </p>
+                <?php endif; ?>
             </div>
             <div class="header-right">
                 <div class="receipt-badge">FEE RECEIPT</div>
@@ -240,8 +252,10 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
     <div class="card-bottom-group">
         <div class="receipt-footer">
             <div class="note-col text-left">
-                <p>• Form confirmation fee (₹500) is non-refundable upon cancellation.</p>
-                <p>• Official computer-generated receipt for institutional records.</p>
+                <?php foreach ($receiptTermsLines as $termLine): ?>
+                    <?php $cleanLine = ltrim($termLine, "•-* \t"); ?>
+                    <p>• <?= e($cleanLine) ?></p>
+                <?php endforeach; ?>
             </div>
             <div class="sign-col text-right">
                 <div class="sign-space"></div>
@@ -767,13 +781,13 @@ function render_receipt_card(array $payment, string $copyType, string $stageTitl
 
 <div class="receipt-sheet">
     <!-- 1. STUDENT COPY (Top Half of A4) -->
-    <?php render_receipt_card($payment, 'STUDENT COPY', $stageTitle, $stageDesc, $businessName); ?>
+    <?php render_receipt_card($payment, 'STUDENT COPY', $stageTitle, $stageDesc, $businessName, $instituteTagline, $institutePhone, $instituteAddress, $receiptTermsLines); ?>
 
     <!-- Very Faint Cutting Guide Line (Without text, ultra subtle) -->
     <div class="cut-divider"></div>
 
     <!-- 2. OFFICE COPY (Bottom Half of A4) -->
-    <?php render_receipt_card($payment, 'OFFICE COPY', $stageTitle, $stageDesc, $businessName); ?>
+    <?php render_receipt_card($payment, 'OFFICE COPY', $stageTitle, $stageDesc, $businessName, $instituteTagline, $institutePhone, $instituteAddress, $receiptTermsLines); ?>
 </div>
 
 <?php if (!empty($_GET['print']) || !empty($_GET['autoprint'])): ?>

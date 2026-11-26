@@ -7,27 +7,170 @@ require_once __DIR__ . '/components/export_button.php';
 
 /** ---------------- Settings ---------------- */
 
+/**
+ * Authoritative catalog of default settings introduced for dynamic customization.
+ * Ensures live installations automatically receive missing settings without manual SQL.
+ */
+function get_default_settings_catalog(): array
+{
+    $defaultRules = implode("\n", [
+        'ફોર્મ ભરતી વખતે ભરેલી રકમ કોઈપણ સંજોગો નામ કેન્સલ થાય તો પરત મળશે નહીં.',
+        'જે વ્યક્તિના નામ નું ફોર્મ ભરેલું હશે તે જ વ્યક્તિએ આવવાનું રહેશે.',
+        'જો કોઈપણ સંજોગોમાં નામ ચેન્જ કરવાનું થાય તો પણ ફોર્મ અને ફોર્મની રકમ ફરીથી ભરવાની રહેશે પણ જે વ્યક્તિની જગ્યાએ તેના સ્થાન મળી શકશે તેને વેઈટીંગ માં રહેવું પડશે નહીં. પણ કેન્સલ કરાવ્યા પછી તે સ્થાન કોઈપણ વ્યક્તિને મળશે નહીં.',
+        'એન્ટ્રી કર્યા ના પહેલા જ દિવસે એન્ટ્રી ફી ફરજીયાત આપવાની રહેશે.',
+        'એન્ટ્રી કર્યા પછી જો આવવાનું બંધ કરવામાં આવે તો એન્ટ્રીમાં ભરેલી ફી પરત આપવામાં આવશે નહીં.',
+        'ફીની બાકીની રકમ દસ દિવસમાં આપવાની રહેશે દસ દિવસ પછી જો આવવાનું બંધ કરવામાં આવે તો ભરેલી કોઈપણ રકમ પરત આપવામાં આવશે નહીં.',
+        'કોઈપણ વહીવટ કરવા જે તે વ્યક્તિ નું ફોર્મ હોય તેને રૂબરૂ આવવાનું રહેશે બીજી કોઈ પણ વ્યક્તિનું સાંભળવામાં આવશે નહીં.',
+        'વારો આવ્યા નો ફોન આવે જે તે વ્યક્તિએ આવવાની હા પાડ્યા પછી તે દિવસે ન આવે તો તે દિવસ તેનામાં ગણવામાં આવશે તેમ જો બે દિવસ ન આવે તો તેનું ફોર્મ રદ કરવામાં આવશે પછી તેણે ફરીથી ફોર્મ અને ફોર્મની રકમ ભરવાની રહેશે તેમજ વેઈટીંગમાં રહેવાનું રહેશે.',
+        'વારો આવ્યા પછી એકવાર લેટ કરાવી શકાશે પરંતુ બીજીવાર વારો આવે એટલે ફરજીયાત આવવાનું રહેશે. અને જો ત્યારે પણ ન આવે તો ફોર્મ કેન્સલ કરવામાં આવશે તથા ભરેલી ફોર્મની રકમ પરત કરવામાં આવશે નહીં.',
+        '16 વર્ષ થી નીચેની તેમજ 45 વર્ષથી ઉપરની બહેનોને શીખવવામાં આવશે નહીં.',
+        'જે-તે વ્યક્તિનો ફોન નંબર આપ્યો હોય અને તે વ્યક્તિ ફોન પર જ નામ કેન્સલ કરાવી નાખશે તો પણ નામ કેન્સલ થઈ જશે પછી કોઈ તકરાર કરવી નહીં.',
+        'જો કોઈ અગમ્ય કારણસર વચ્ચે અટકા વવાની ફરજ પડે તો તેની જાણ કર્યા ના ત્રીજા દિવસથી એના બાકી બચતા દિવસ ને 1.5 મહિના પછી આપવામાં આવશે પરંતુ ભરેલી રકમ પરત આપવામાં આવશે નહીં.',
+        'શીખવા માટે ફૂલ સાઇઝ નું કાપડ લાવવાનું રહેશે. ટુકડામાં કાપડ ચાલશે નહીં.',
+        'પહેલા બે જોડી ડ્રેસમાં મોટી સાઈઝ નું માપ જ ચાલશે નાની સાઈઝ નું માપ લાવવું નહીં.',
+        'બેન્ચ શરૂ થાય ત્યારે સમયસર આવવું અને બેન્ચ પૂરી થાય ત્યારે તરત જ મશીન ખાલી કરવાનું રહેશે.',
+        'દર રવિવારે રજા રહેશે રવિવાર સાથે જ 45 દિવસ ગણવામાં આવશે.',
+        'તમારી કોઈ પણ કારણે પાડેલી રજા પરત આપવામાં આવશે નહીં.',
+        'અમારા પર્સનલ કારણસર કે તહેવાર નિમિત્તે પાડેલી રજા અમારે આપવાની રહેશે.',
+        '45 દિવસ ઉપર એક પણ દિવસ આપવામાં આવશે નહીં વધારે દિવસ ભરવાની ફી અલગથી આપવાની રહેશે.',
+        'લેડીસ ટેલર્સ ના કામ સિવાય નું બીજું કાંઈ પણ કામ શીખવવામાં આવશે નહીં.',
+        'દરેક કપડા બોડી મેજરમેન્ટ થી શીખવવામાં આવશે.',
+        'ક્લાસ ની કોઈ સ્પેશિયલ વસ્તુ એકસ્ટ્રા બેન્ચ તેમજ એકસ્ટ્રા ફી ચૂકવીને શીખવવાની રહેશે તે રેગ્યુલર બેન્ચમાં શીખવવામાં આવશે નહીં તેમજ તે જૂના સ્ટુડન્ટ માટે જ રહેશે.',
+        'બીજાને સિલાઈકામ શીખવાડતા હોય તેવા વ્યક્તિએ ક્લાસમાં શીખવા આવવું નહીં તો પણ ગેરકાયદેસર રીતે એન્ટ્રી કરશે અને પકડાઈ જશે તો તેની ભરેલી ફી પરત મળશે નહીં અને તેને જાણ થાય ત્યારથી જ ક્લાસ માંથી કાઢી મુકવામાં આવશે.',
+        'સીવણ ક્લાસ માં ઑડિયો તેમજ વિડીયો રેકોર્ડીંગ કરવું નહીં.',
+        'ક્લાસમાં શીખ્યા પછી કોઈ કલાસીસ ચાલુ કરે તો તેને સીવણ ક્લાસમાં કંઈ પણ પૂછવા આવવાનો હક રહેશે નહીં.',
+    ]);
+
+    return [
+        // Form Field Requirement toggles (1 = required, 0 = optional)
+        'form_req_student_mobile' => ['1', 'form_fields', 'Require Student Mobile in forms'],
+        'form_req_father_mobile'  => ['0', 'form_fields', 'Require Husband/Father Mobile'],
+        'form_req_home_mobile'    => ['0', 'form_fields', 'Require Home Mobile'],
+        'form_req_age'            => ['0', 'form_fields', 'Require Student Age'],
+        'form_req_education'      => ['0', 'form_fields', 'Require Education'],
+        'form_req_address'        => ['1', 'form_fields', 'Require Full Address'],
+        'form_req_photo'          => ['1', 'form_fields', 'Require Student Passport Photo'],
+        'form_req_knows_sewing'   => ['0', 'form_fields', 'Require Sewing Experience Answer'],
+        'form_req_hear_about_us'  => ['0', 'form_fields', 'Require Hear About Us Source'],
+        'form_req_referral'       => ['0', 'form_fields', 'Require Referral Details'],
+        'form_req_guardian'       => ['0', 'form_fields', 'Require Guardian Name & Relation'],
+
+        // Form Field Visibility toggles (1 = visible, 0 = hidden)
+        'form_vis_father_mobile'  => ['1', 'form_fields', 'Show Husband/Father Mobile field'],
+        'form_vis_home_mobile'    => ['1', 'form_fields', 'Show Home Mobile field'],
+        'form_vis_age'            => ['1', 'form_fields', 'Show Age field'],
+        'form_vis_education'      => ['1', 'form_fields', 'Show Education field'],
+        'form_vis_address'        => ['1', 'form_fields', 'Show Full Address field'],
+        'form_vis_photo'          => ['1', 'form_fields', 'Show Passport Photo upload'],
+        'form_vis_knows_sewing'   => ['1', 'form_fields', 'Show Sewing Experience section'],
+        'form_vis_hear_about_us'  => ['1', 'form_fields', 'Show Hear About Us section'],
+        'form_vis_referral'       => ['1', 'form_fields', 'Show Referral Details section'],
+        'form_vis_guardian'       => ['1', 'form_fields', 'Show Guardian Details section'],
+
+        // Branding & Print Templates
+        'institute_tagline'       => ['Stitching & Fashion Designing Training Institute', 'branding', 'Displayed below institute name on printouts'],
+        'institute_phone'         => ['', 'branding', 'Contact phone number displayed on receipts/forms'],
+        'institute_address'       => ['', 'branding', 'Institute address displayed on receipts/forms'],
+        'receipt_terms_text'      => ["• Form confirmation fee is non-refundable upon cancellation.\n• Official computer-generated receipt for institutional records.", 'branding', 'Terms printed at bottom of fee receipts'],
+        'admission_rules_text'    => [$defaultRules, 'branding', 'Rules printed on Page 2 of Admission Form (1 rule per line)'],
+        'admission_caution_text'  => ['ફોર્મ વ્યવસ્થિત વાંચીને સમજી વિચારીને ભરવું પછી તેના નિયમ વિરુદ્ધ કંઈપણ સાંભળવામાં આવશે નહીં.', 'branding', 'Caution banner text at bottom of Admission Form rules'],
+    ];
+}
+
+function load_all_settings(bool $forceReload = false): array
+{
+    if ($forceReload || !isset($GLOBALS['_APP_SETTINGS_CACHE'])) {
+        $pdo = db();
+        $rows = $pdo->query("SELECT setting_key, setting_value FROM settings")->fetchAll();
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['setting_key']] = $row['setting_value'];
+        }
+        $GLOBALS['_APP_SETTINGS_CACHE'] = $map;
+
+        if (($map['_settings_v2_ready'] ?? '') !== '1') {
+            ensure_settings_initialized($pdo, $map);
+        }
+    }
+    return $GLOBALS['_APP_SETTINGS_CACHE'];
+}
+
+function ensure_settings_initialized(PDO $pdo, array &$cache): void
+{
+    static $running = false;
+    if ($running) {
+        return;
+    }
+    $running = true;
+
+    try {
+        // Ensure setting_value can hold long print rules and terms text safely
+        $colStmt = $pdo->query("SHOW COLUMNS FROM settings LIKE 'setting_value'");
+        $colInfo = $colStmt ? $colStmt->fetch() : null;
+        if ($colInfo && stripos($colInfo['Type'] ?? '', 'text') === false) {
+            $pdo->exec("ALTER TABLE settings MODIFY COLUMN setting_value TEXT NOT NULL");
+        }
+
+        $catalog = get_default_settings_catalog();
+        $insertStmt = $pdo->prepare(
+            "INSERT IGNORE INTO settings (setting_key, setting_value, setting_group, description)
+             VALUES (?, ?, ?, ?)"
+        );
+        foreach ($catalog as $key => [$val, $group, $desc]) {
+            if (!array_key_exists($key, $cache)) {
+                $insertStmt->execute([$key, $val, $group, $desc]);
+                $cache[$key] = $val;
+            }
+        }
+
+        $pdo->prepare(
+            "INSERT INTO settings (setting_key, setting_value, setting_group, description)
+             VALUES ('_settings_v2_ready', '1', 'system', 'Internal migration marker for dynamic settings')
+             ON DUPLICATE KEY UPDATE setting_value = '1'"
+        )->execute();
+        $cache['_settings_v2_ready'] = '1';
+        $GLOBALS['_APP_SETTINGS_CACHE'] = $cache;
+    } catch (Throwable $e) {
+        // Non-fatal fallback; defaults remain accessible via get_setting()
+    } finally {
+        $running = false;
+    }
+}
+
 function get_setting(string $key, $default = null)
 {
-    static $cache = [];
+    $cache = load_all_settings();
     if (array_key_exists($key, $cache)) {
         return $cache[$key];
     }
-    $stmt = db()->prepare("SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1");
-    $stmt->execute([$key]);
-    $row = $stmt->fetch();
-    $cache[$key] = $row ? $row['setting_value'] : $default;
-    return $cache[$key];
+    $catalog = get_default_settings_catalog();
+    if (isset($catalog[$key]) && $default === null) {
+        return $catalog[$key][0];
+    }
+    return $default;
 }
 
-function set_setting(string $key, string $value, ?int $userId = null): void
+function set_setting(string $key, string $value, ?int $userId = null, ?string $group = null, ?string $description = null): void
 {
-    $stmt = db()->prepare(
-        "INSERT INTO settings (setting_key, setting_value, updated_by, updated_at)
-         VALUES (?, ?, ?, NOW())
-         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()"
-    );
-    $stmt->execute([$key, $value, $userId]);
+    $pdo = db();
+    if ($group !== null) {
+        $stmt = $pdo->prepare(
+            "INSERT INTO settings (setting_key, setting_value, setting_group, description, updated_by, updated_at)
+             VALUES (?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), setting_group = VALUES(setting_group), updated_by = VALUES(updated_by), updated_at = NOW()"
+        );
+        $stmt->execute([$key, $value, $group, $description, $userId]);
+    } else {
+        $stmt = $pdo->prepare(
+            "INSERT INTO settings (setting_key, setting_value, updated_by, updated_at)
+             VALUES (?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()"
+        );
+        $stmt->execute([$key, $value, $userId]);
+    }
+    if (isset($GLOBALS['_APP_SETTINGS_CACHE'])) {
+        $GLOBALS['_APP_SETTINGS_CACHE'][$key] = $value;
+    }
 }
 
 /** Current per-day extension charge (effective today), or null if none set. */

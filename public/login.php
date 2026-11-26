@@ -16,19 +16,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('public/dashboard.php');
     }
 }
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login - Devangi Sewing Classes</title>
+<title>Login - <?= e($businessName) ?></title>
 <link rel="stylesheet" href="<?= url('public/assets/css/app.css') ?>">
 </head>
 <body>
 <div class="login-wrap">
   <div class="login-card">
-    <h1>Devangi Sewing Classes</h1>
+    <h1><?= e($businessName) ?></h1>
     <p>Sign in to access the Student Management Admin Panel.</p>
     <?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
     <form method="post">

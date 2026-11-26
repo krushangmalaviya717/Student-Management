@@ -34,8 +34,9 @@ function confirm_joining(int $studentId, int $batchId, string $entryDate, int $u
         if (!$student) throw new RuntimeException('Student not found.');
 
         // Capacity check
-        if (count_active_students_in_batch($batchId) >= get_batch_capacity($batchId)) {
-            throw new RuntimeException('Selected batch is already at full capacity (8/8). Cannot confirm joining.');
+        $batchCapacity = get_batch_capacity($batchId);
+        if (count_active_students_in_batch($batchId) >= $batchCapacity) {
+            throw new RuntimeException("Selected batch is already at full capacity ({$batchCapacity}/{$batchCapacity}). Cannot confirm joining.");
         }
 
         $baseExpiry = calculate_base_expiry($entryDate);

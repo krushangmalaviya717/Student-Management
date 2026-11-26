@@ -483,4 +483,229 @@ class StudentService
 
         ExportService::downloadCsv($filename, $headers, $rows);
     }
+
+    /**
+     * Authoritative metadata & current configuration for Admission/Edit form fields.
+     */
+    public static function getFormFieldConfig(): array
+    {
+        $defs = [
+            'name' => [
+                'label' => 'Student Full Name',
+                'gujarati_label' => 'પૂરું નામ',
+                'group' => 'Personal & Contact',
+                'can_hide' => false,
+                'can_optional' => false,
+                'default_req' => '1',
+                'default_vis' => '1',
+            ],
+            'student_mobile' => [
+                'label' => 'Student Mobile No.',
+                'gujarati_label' => 'સ્ટુડન્ટ નો મો.નં.',
+                'group' => 'Personal & Contact',
+                'can_hide' => false,
+                'can_optional' => true,
+                'default_req' => '1',
+                'default_vis' => '1',
+                'note' => 'Used for Student Portal login when provided.',
+            ],
+            'age' => [
+                'label' => 'Age',
+                'gujarati_label' => 'ઉંમર',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'father_mobile' => [
+                'label' => 'Husband / Father Mobile',
+                'gujarati_label' => 'પતિ / પિતા નો મો.નં.',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'home_mobile' => [
+                'label' => 'Home Mobile',
+                'gujarati_label' => 'ઘર નો મો.નં.',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'education' => [
+                'label' => 'Education',
+                'gujarati_label' => 'અભ્યાસ',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'photo' => [
+                'label' => 'Passport Photo (35mm x 45mm)',
+                'gujarati_label' => 'ફોટો',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '1',
+                'default_vis' => '1',
+            ],
+            'address' => [
+                'label' => 'Full Address',
+                'gujarati_label' => 'પૂરું સરનામું',
+                'group' => 'Personal & Contact',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '1',
+                'default_vis' => '1',
+            ],
+            'knows_sewing' => [
+                'label' => 'Sewing Experience',
+                'gujarati_label' => 'સિલાઈ કામ ની માહિતી',
+                'group' => 'Questionnaire & Source',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'hear_about_us' => [
+                'label' => 'How Did You Hear About Us?',
+                'gujarati_label' => 'ક્લાસીસ ની માહિતી ક્યાંથી મળી?',
+                'group' => 'Questionnaire & Source',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'referral' => [
+                'label' => 'Referral Details (Name & Mobile)',
+                'gujarati_label' => 'રેફરન્સ ની વિગત',
+                'group' => 'Questionnaire & Source',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+            'guardian' => [
+                'label' => 'Guardian Name & Relation',
+                'gujarati_label' => 'ઘરના વડીલ નું નામ અને સંબંધ',
+                'group' => 'Guardian / Undertaking',
+                'can_hide' => true,
+                'can_optional' => true,
+                'default_req' => '0',
+                'default_vis' => '1',
+            ],
+        ];
+
+        $config = [];
+        foreach ($defs as $key => $meta) {
+            $visible = $meta['can_hide']
+                ? (get_setting('form_vis_' . $key, $meta['default_vis']) === '1')
+                : true;
+            $required = $meta['can_optional']
+                ? ($visible && get_setting('form_req_' . $key, $meta['default_req']) === '1')
+                : true;
+
+            $config[$key] = array_merge($meta, [
+                'key' => $key,
+                'visible' => $visible,
+                'required' => $required,
+            ]);
+        }
+        return $config;
+    }
+
+    /**
+     * Validate student form payload dynamically against settings-configured rules.
+     */
+    public static function validateStudentData(array $post, array $options = []): array
+    {
+        $cfg = self::getFormFieldConfig();
+        $isEdit = !empty($options['is_edit']);
+        $hasPhoto = !empty($options['has_photo']);
+
+        $name = trim((string)($post['name'] ?? ''));
+        $studentMobile = trim((string)($post['student_mobile'] ?? ''));
+        $fatherMobile = trim((string)($post['husband_father_mobile'] ?? ''));
+        $homeMobile = trim((string)($post['home_mobile'] ?? ''));
+        $ageRaw = trim((string)($post['age'] ?? ''));
+        $education = trim((string)($post['education'] ?? ''));
+        $address = trim((string)($post['address'] ?? ''));
+        $hearAboutUs = trim((string)($post['hear_about_us'] ?? ''));
+        $refName = trim((string)($post['reference_person_name'] ?? $post['relative_name'] ?? ''));
+        $refMobile = trim((string)($post['reference_mobile'] ?? $post['relative_mobile'] ?? ''));
+        $guardianName = trim((string)($post['guardian_signature_name'] ?? ''));
+        $guardianRelation = trim((string)($post['guardian_relation'] ?? ''));
+
+        $missing = [];
+        if ($name === '') {
+            $missing[] = 'Student Name';
+        }
+        if ($cfg['student_mobile']['required'] && $studentMobile === '') {
+            $missing[] = 'Student Mobile';
+        }
+        if ($cfg['age']['required'] && ($ageRaw === '' || (int)$ageRaw <= 0)) {
+            $missing[] = 'Age';
+        }
+        if ($cfg['father_mobile']['required'] && $fatherMobile === '') {
+            $missing[] = 'Husband / Father Mobile';
+        }
+        if ($cfg['home_mobile']['required'] && $homeMobile === '') {
+            $missing[] = 'Home Mobile';
+        }
+        if ($cfg['education']['required'] && $education === '') {
+            $missing[] = 'Education';
+        }
+        if ($cfg['address']['required'] && $address === '') {
+            $missing[] = 'Full Address';
+        }
+        if ($cfg['photo']['required'] && !$hasPhoto) {
+            $missing[] = 'Student Photo';
+        }
+        if ($cfg['knows_sewing']['required'] && !isset($post['knows_sewing'])) {
+            $missing[] = 'Sewing Experience (Yes/No)';
+        }
+        if ($cfg['hear_about_us']['required'] && $hearAboutUs === '') {
+            $missing[] = 'How Did You Hear About Us';
+        }
+        if ($cfg['referral']['required'] && ($refName === '' || $refMobile === '')) {
+            $missing[] = 'Referral Details (Name & Mobile)';
+        }
+        if ($cfg['guardian']['required'] && ($guardianName === '' || $guardianRelation === '')) {
+            $missing[] = 'Guardian Name & Relation';
+        }
+
+        if ($missing) {
+            throw new RuntimeException('Please fill required field(s): ' . implode(', ', $missing) . '.');
+        }
+
+        if (!$isEdit) {
+            $anyBatch = !empty($post['any_batch']) ? 1 : 0;
+            $preferredBatch = $anyBatch ? null : (!empty($post['preferred_batch_id']) ? (int)$post['preferred_batch_id'] : null);
+            if (!$anyBatch && !$preferredBatch) {
+                throw new RuntimeException('Choose a preferred batch, or tick "Any Batch".');
+            }
+        }
+
+        return [
+            'name' => $name,
+            'student_mobile' => $studentMobile,
+            'husband_father_mobile' => $fatherMobile !== '' ? $fatherMobile : null,
+            'home_mobile' => $homeMobile !== '' ? $homeMobile : null,
+            'age' => $ageRaw !== '' ? (int)$ageRaw : null,
+            'education' => $education !== '' ? $education : null,
+            'address' => $address,
+            'knows_sewing' => !empty($post['knows_sewing']) ? 1 : 0,
+            'previous_sewing_work' => trim((string)($post['previous_sewing_work'] ?? '')) ?: null,
+            'hear_about_us' => $hearAboutUs !== '' ? $hearAboutUs : null,
+            'reference_person_name' => $refName !== '' ? $refName : null,
+            'reference_mobile' => $refMobile !== '' ? $refMobile : null,
+            'guardian_signature_name' => $guardianName !== '' ? $guardianName : null,
+            'guardian_relation' => $guardianRelation !== '' ? $guardianRelation : null,
+        ];
+    }
 }

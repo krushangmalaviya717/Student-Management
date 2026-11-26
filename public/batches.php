@@ -320,7 +320,7 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     </div>
                     <div>
                         <label for="add_capacity">Capacity *</label>
-                        <input type="number" name="capacity" id="add_capacity" value="8" min="1" max="100" required>
+                        <input type="number" name="capacity" id="add_capacity" value="<?= (int)get_setting('default_batch_capacity', 8) ?>" min="1" max="100" required>
                     </div>
                 </div>
 

@@ -98,6 +98,10 @@ $stageLabels = [
 
 $stageKey = $payment['stage'] ?? '';
 $stageTitle = $stageLabels[$stageKey] ?? ucwords(str_replace('_', ' ', $stageKey));
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
+$instituteTagline = get_setting('institute_tagline', 'Stitching & Fashion Designing Training Institute');
+$institutePhone = trim((string)get_setting('institute_phone', ''));
+$instituteAddress = trim((string)get_setting('institute_address', ''));
 ?>
 
 <div class="mb-3 d-flex justify-content-between align-items-center">
@@ -115,10 +119,13 @@ $stageTitle = $stageLabels[$stageKey] ?? ucwords(str_replace('_', ' ', $stageKey
             <i class="bi bi-patch-check-fill"></i>
         </div>
         <h3 style="margin: 0 0 4px 0; font-size: 19px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px;">
-            DEVANGI SEWING CLASSES
+            <?= htmlspecialchars(strtoupper($businessName)) ?>
         </h3>
         <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 12px;">
-            Fashion Designing Training Institute (Govt. Regd.)
+            <?= htmlspecialchars($instituteTagline) ?>
+            <?php if ($institutePhone !== '' || $instituteAddress !== ''): ?>
+                <br><span style="font-size: 11px;"><?= htmlspecialchars(implode(' | ', array_filter([$institutePhone, $instituteAddress]))) ?></span>
+            <?php endif; ?>
         </div>
         <div>
             <span style="display: inline-block; background: rgba(255, 255, 255, 0.15); color: #fef08a; border: 1px solid rgba(254, 240, 138, 0.4); font-size: 10.5px; font-weight: 700; letter-spacing: 1px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
@@ -204,7 +211,7 @@ $stageTitle = $stageLabels[$stageKey] ?? ucwords(str_replace('_', ' ', $stageKey
     <!-- Institutional Footer & Verification -->
     <div style="background: #f8fafc; padding: 14px 24px; border-top: 1px solid #e2e8f0; font-size: 11.5px; color: #64748b; line-height: 1.6; text-align: center;">
         <div style="color: #047857; font-weight: 600; margin-bottom: 2px;">
-            <i class="bi bi-shield-check me-1"></i> Verified Official Digital Record &bull; Devangi Sewing Classes
+            <i class="bi bi-shield-check me-1"></i> Verified Official Digital Record &bull; <?= htmlspecialchars($businessName) ?>
         </div>
         <div>This is an official computer-generated receipt. No physical signature is required.</div>
     </div>

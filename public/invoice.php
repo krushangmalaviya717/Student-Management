@@ -78,13 +78,18 @@ if ($invoice['extension_id']) {
     $liStmt->execute([$invoice['extension_id']]);
     $lineItems = $liStmt->fetchAll();
 }
+
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
+$instituteTagline = get_setting('institute_tagline', 'Stitching & Fashion Designing Training Institute');
+$institutePhone = trim((string)get_setting('institute_phone', ''));
+$instituteAddress = trim((string)get_setting('institute_address', ''));
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Invoice <?= e($invoice['invoice_no']) ?> - Devangi Sewing Classes</title>
+<title>Invoice <?= e($invoice['invoice_no']) ?> - <?= e($businessName) ?></title>
 <style>
     body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -272,8 +277,11 @@ if ($invoice['extension_id']) {
 <div class="invoice-container">
     <div class="header">
         <div>
-            <h1>DEVANGI SEWING CLASSES</h1>
-            <div class="tagline">Stitching & Fashion Designing Training Institute</div>
+            <h1><?= e(strtoupper($businessName)) ?></h1>
+            <div class="tagline"><?= e($instituteTagline) ?></div>
+            <?php if ($institutePhone !== '' || $instituteAddress !== ''): ?>
+                <div class="tagline" style="font-size: 11.5px; margin-top: 3px;"><?= e(implode(' | ', array_filter([$institutePhone, $instituteAddress]))) ?></div>
+            <?php endif; ?>
         </div>
         <div class="invoice-meta">
             <div class="invoice-title">EXTENSION INVOICE</div>

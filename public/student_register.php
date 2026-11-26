@@ -3,40 +3,37 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/queue_engine.php';
 require_once __DIR__ . '/../includes/payment_engine.php';
+require_once __DIR__ . '/../includes/services/StudentService.php';
 require_admin();
 
 $pdo = db();
 $batches = $pdo->query("SELECT * FROM batches WHERE is_active = 1 ORDER BY start_time")->fetchAll();
+$fields = StudentService::getFormFieldConfig();
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     try {
-        $name = trim($_POST['name'] ?? '');
-        $mobile = trim($_POST['student_mobile'] ?? '');
-        $address = trim($_POST['address'] ?? '');
+        // Photo upload & Cropped Image processing (only when photo field is visible)
+        $photoPath = null;
+        if ($fields['photo']['visible']) {
+            $photoPath = save_uploaded_student_photo(
+                $_POST['cropped_photo_data'] ?? null,
+                $_FILES['photo'] ?? null,
+                UPLOAD_DIR,
+                UPLOAD_URL,
+                MAX_PHOTO_SIZE_MB
+            );
+        }
+
+        // Dynamic server-side validation driven by Settings
+        $data = StudentService::validateStudentData($_POST, [
+            'is_edit' => false,
+            'has_photo' => !empty($photoPath),
+        ]);
+
         $anyBatch = isset($_POST['any_batch']) ? 1 : 0;
         $preferredBatch = $anyBatch ? null : ($_POST['preferred_batch_id'] ?: null);
-
-        if (!$name || !$mobile || !$address) {
-            throw new RuntimeException('Name, mobile and address are required.');
-        }
-        if (!$anyBatch && !$preferredBatch) {
-            throw new RuntimeException('Choose a preferred batch, or tick "Any Batch".');
-        }
-
-        // Photo upload & Cropped Image processing (MIME, size & dimension validated)
-        $photoPath = save_uploaded_student_photo(
-            $_POST['cropped_photo_data'] ?? null,
-            $_FILES['photo'] ?? null,
-            UPLOAD_DIR,
-            UPLOAD_URL,
-            MAX_PHOTO_SIZE_MB
-        );
-
-        if (!$photoPath) {
-            throw new RuntimeException('Student photo is mandatory.');
-        }
 
         $pdo->beginTransaction();
         $formNo = generate_form_no();
@@ -49,30 +46,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)"
         );
         $stmt->execute([
-            $formNo, $name, $_POST['age'] ?: null, $mobile,
-            $_POST['husband_father_mobile'] ?: null, $_POST['home_mobile'] ?: null,
-            $_POST['education'] ?: null, $address,
-            isset($_POST['knows_sewing']) ? 1 : 0, $_POST['previous_sewing_work'] ?: null,
-            $_POST['hear_about_us'] ?: null, $_POST['guardian_signature_name'] ?: null, $_POST['guardian_relation'] ?: null,
-            $preferredBatch, $anyBatch, $photoPath, current_user()['id'],
+            $formNo,
+            $data['name'],
+            $data['age'],
+            $data['student_mobile'],
+            $data['husband_father_mobile'],
+            $data['home_mobile'],
+            $data['education'],
+            $data['address'],
+            $data['knows_sewing'],
+            $data['previous_sewing_work'],
+            $data['hear_about_us'],
+            $data['guardian_signature_name'],
+            $data['guardian_relation'],
+            $preferredBatch,
+            $anyBatch,
+            $photoPath,
+            current_user()['id'],
         ]);
         $studentId = (int)$pdo->lastInsertId();
 
-        // Referral (optional)
-        $relName = $_POST['relative_name'] ?: ($_POST['reference_person_name'] ?? null);
-        $relMobile = $_POST['relative_mobile'] ?: ($_POST['reference_mobile'] ?? null);
-        if (!empty($relName) || !empty($relMobile)) {
+        // Referral (optional or required based on settings)
+        if ($fields['referral']['visible'] && (!empty($data['reference_person_name']) || !empty($data['reference_mobile']))) {
             $pdo->prepare(
                 "INSERT INTO referrals (student_id, relative_student_id, relative_name, relative_mobile, relative_address, relation)
                  VALUES (?, ?, ?, ?, ?, ?)"
             )->execute([
-                $studentId, $_POST['relative_student_id'] ?: null,
-                $relName, $relMobile,
-                $_POST['relative_address'] ?: null, $_POST['relation'] ?: 'Referral',
+                $studentId,
+                $_POST['relative_student_id'] ?: null,
+                $data['reference_person_name'],
+                $data['reference_mobile'],
+                $_POST['relative_address'] ?: null,
+                $_POST['relation'] ?: 'Referral',
             ]);
         }
 
-        log_audit('student', $studentId, 'create_draft', null, ['form_no' => $formNo, 'name' => $name]);
+        log_audit('student', $studentId, 'create_draft', null, ['form_no' => $formNo, 'name' => $data['name']]);
         $pdo->commit();
 
         flash('success', "Student form #$formNo registered successfully. Please collect the form fee in the Payments tab.");
@@ -128,6 +137,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
     border-color: var(--primary);
     background: var(--primary-light);
     color: var(--primary-hover);
+}
+.req-star {
+    color: var(--danger);
+    font-weight: 700;
 }
 .reg-submit-footer {
     margin-top: 24px;
@@ -231,131 +244,170 @@ require_once __DIR__ . '/../includes/layout_header.php';
         <div class="card-header-bar" style="margin-bottom: 18px;">
             <div>
                 <h2>Student Admission Form</h2>
-                <small class="muted">Fields marked with * are required. Passport photo (35mm x 45mm) will be cropped automatically.</small>
+                <small class="muted">
+                    Fields marked with <span class="req-star">*</span> are required (configurable in
+                    <?php if (is_super_admin()): ?>
+                        <a href="<?= url('public/settings.php?tab=form_fields') ?>">Settings</a>).
+                    <?php else: ?>
+                        Settings).
+                    <?php endif; ?>
+                </small>
             </div>
             <a href="<?= url('public/students_list.php') ?>" class="btn btn-sm btn-secondary">Back to Students</a>
         </div>
 
         <div class="section-title">Personal &amp; Contact Details</div>
         <div class="row form-group">
-            <div>
-                <label for="reg_name">Student Name *</label>
+            <div class="<?= !$fields['age']['visible'] ? 'col-full' : '' ?>">
+                <label for="reg_name">Student Name <span class="req-star">*</span></label>
                 <input type="text" id="reg_name" name="name" required value="<?= e($_POST['name'] ?? '') ?>">
             </div>
+            <?php if ($fields['age']['visible']): ?>
             <div>
-                <label for="reg_age">Age</label>
-                <input type="number" id="reg_age" name="age" min="1" value="<?= e($_POST['age'] ?? '') ?>">
+                <label for="reg_age">Age <?= $fields['age']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="number" id="reg_age" name="age" min="1" <?= $fields['age']['required'] ? 'required' : '' ?> value="<?= e($_POST['age'] ?? '') ?>">
             </div>
+            <?php endif; ?>
         </div>
 
         <div class="row3 form-group">
             <div>
-                <label for="reg_mobile">Student Mobile *</label>
-                <input type="tel" id="reg_mobile" name="student_mobile" required value="<?= e($_POST['student_mobile'] ?? '') ?>">
+                <label for="reg_mobile">Student Mobile <?= $fields['student_mobile']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="tel" id="reg_mobile" name="student_mobile" <?= $fields['student_mobile']['required'] ? 'required' : '' ?> value="<?= e($_POST['student_mobile'] ?? '') ?>">
             </div>
+            <?php if ($fields['father_mobile']['visible']): ?>
             <div>
-                <label for="reg_guardian_mobile">Husband / Father Mobile</label>
-                <input type="tel" id="reg_guardian_mobile" name="husband_father_mobile">
+                <label for="reg_guardian_mobile">Husband / Father Mobile <?= $fields['father_mobile']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="tel" id="reg_guardian_mobile" name="husband_father_mobile" <?= $fields['father_mobile']['required'] ? 'required' : '' ?> value="<?= e($_POST['husband_father_mobile'] ?? '') ?>">
             </div>
+            <?php endif; ?>
+            <?php if ($fields['home_mobile']['visible']): ?>
             <div>
-                <label for="reg_home_mobile">Home Mobile</label>
-                <input type="tel" id="reg_home_mobile" name="home_mobile">
+                <label for="reg_home_mobile">Home Mobile <?= $fields['home_mobile']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="tel" id="reg_home_mobile" name="home_mobile" <?= $fields['home_mobile']['required'] ? 'required' : '' ?> value="<?= e($_POST['home_mobile'] ?? '') ?>">
             </div>
+            <?php endif; ?>
         </div>
 
+        <?php if ($fields['education']['visible'] || $fields['photo']['visible']): ?>
         <div class="row form-group" style="align-items: start;">
-            <div>
-                <label for="reg_education">Education</label>
-                <input type="text" id="reg_education" name="education">
+            <?php if ($fields['education']['visible']): ?>
+            <div class="<?= !$fields['photo']['visible'] ? 'col-full' : '' ?>">
+                <label for="reg_education">Education <?= $fields['education']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="text" id="reg_education" name="education" <?= $fields['education']['required'] ? 'required' : '' ?> value="<?= e($_POST['education'] ?? '') ?>">
             </div>
-            <div>
-                <label for="photoInput">Photo (35mm x 45mm Passport Crop) *</label>
-                <input type="file" id="photoInput" accept="image/*" style="padding: 5px 10px; height: auto;">
+            <?php endif; ?>
+            <?php if ($fields['photo']['visible']): ?>
+            <div class="<?= !$fields['education']['visible'] ? 'col-full' : '' ?>">
+                <label for="photoInput">Photo (35mm x 45mm Passport Crop) <?= $fields['photo']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="file" id="photoInput" name="photo" accept="image/*" <?= $fields['photo']['required'] ? 'required' : '' ?> style="padding: 5px 10px; height: auto;">
                 <div id="previewBox" class="crop-preview-box">
                     <img id="previewImg" src="" alt="Cropped Preview">
                 </div>
             </div>
+            <?php endif; ?>
         </div>
+        <?php endif; ?>
 
+        <?php if ($fields['address']['visible']): ?>
         <div class="form-group">
-            <label for="reg_address">Full Address *</label>
-            <textarea id="reg_address" name="address" rows="2" required></textarea>
+            <label for="reg_address">Full Address <?= $fields['address']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+            <textarea id="reg_address" name="address" rows="2" <?= $fields['address']['required'] ? 'required' : '' ?>><?= e($_POST['address'] ?? '') ?></textarea>
         </div>
+        <?php endif; ?>
 
-        <div class="section-title">Sewing Experience</div>
-        <div class="form-group">
-            <label class="checkbox-label" for="reg_knows_sewing">
-                <input type="checkbox" id="reg_knows_sewing" name="knows_sewing" value="1">
-                <span>Knows Sewing?</span>
-            </label>
+        <?php if ($fields['knows_sewing']['visible']): ?>
+        <div class="section-title">Sewing Experience <?= $fields['knows_sewing']['required'] ? '<span class="req-star">*</span>' : '' ?></div>
+        <div class="row form-group" style="align-items: center;">
+            <div>
+                <label style="margin-bottom: 8px;">Do you know sewing? <?= $fields['knows_sewing']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <div class="radio-pill-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 0;">
+                    <label class="radio-pill-option">
+                        <input type="radio" name="knows_sewing" value="1" <?= $fields['knows_sewing']['required'] ? 'required' : '' ?> <?= (($_POST['knows_sewing'] ?? '') === '1') ? 'checked' : '' ?>>
+                        <span>Yes (હા)</span>
+                    </label>
+                    <label class="radio-pill-option">
+                        <input type="radio" name="knows_sewing" value="0" <?= (($_POST['knows_sewing'] ?? '') === '0') ? 'checked' : '' ?>>
+                        <span>No (ના)</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label for="reg_prev_sewing">Previous Sewing Work (if any)</label>
+                <textarea id="reg_prev_sewing" name="previous_sewing_work" rows="2"><?= e($_POST['previous_sewing_work'] ?? '') ?></textarea>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="reg_prev_sewing">Previous Sewing Work (if any)</label>
-            <textarea id="reg_prev_sewing" name="previous_sewing_work" rows="2"></textarea>
-        </div>
+        <?php endif; ?>
 
-        <div class="section-title">Batch Preference</div>
+        <div class="section-title">Batch Preference <span class="req-star">*</span></div>
         <div class="row form-group" style="align-items: center;">
             <div>
                 <label for="batchSelect">Preferred Batch</label>
                 <select name="preferred_batch_id" id="batchSelect">
                     <option value="">-- Select Batch --</option>
                     <?php foreach ($batches as $b): ?>
-                        <option value="<?= $b['id'] ?>"><?= e($b['name']) ?></option>
+                        <option value="<?= $b['id'] ?>" <?= (($_POST['preferred_batch_id'] ?? '') == $b['id']) ? 'selected' : '' ?>><?= e($b['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div style="padding-top: 20px;">
                 <label class="checkbox-label" for="any_batch">
-                    <input type="checkbox" name="any_batch" value="1" id="any_batch" onclick="document.getElementById('batchSelect').disabled=this.checked">
+                    <input type="checkbox" name="any_batch" value="1" id="any_batch" <?= !empty($_POST['any_batch']) ? 'checked' : '' ?> onclick="document.getElementById('batchSelect').disabled=this.checked">
                     <span>Any Batch is acceptable</span>
                 </label>
             </div>
         </div>
 
-        <div class="section-title">How Did You Hear About Us?</div>
+        <?php if ($fields['hear_about_us']['visible']): ?>
+        <div class="section-title">How Did You Hear About Us? <?= $fields['hear_about_us']['required'] ? '<span class="req-star">*</span>' : '' ?></div>
         <div class="radio-pill-grid">
+            <?php $postedSource = $_POST['hear_about_us'] ?? ''; ?>
             <label class="radio-pill-option">
-                <input type="radio" name="hear_about_us" value="Instagram">
+                <input type="radio" name="hear_about_us" value="Instagram" <?= $fields['hear_about_us']['required'] ? 'required' : '' ?> <?= $postedSource === 'Instagram' ? 'checked' : '' ?>>
                 <span>Instagram</span>
             </label>
             <label class="radio-pill-option">
-                <input type="radio" name="hear_about_us" value="Facebook">
+                <input type="radio" name="hear_about_us" value="Facebook" <?= $postedSource === 'Facebook' ? 'checked' : '' ?>>
                 <span>Facebook</span>
             </label>
             <label class="radio-pill-option">
-                <input type="radio" name="hear_about_us" value="Board/Banner">
+                <input type="radio" name="hear_about_us" value="Board/Banner" <?= $postedSource === 'Board/Banner' ? 'checked' : '' ?>>
                 <span>Board / Banner</span>
             </label>
             <label class="radio-pill-option">
-                <input type="radio" name="hear_about_us" value="Relative/Friend">
+                <input type="radio" name="hear_about_us" value="Relative/Friend" <?= $postedSource === 'Relative/Friend' ? 'checked' : '' ?>>
                 <span>Relative / Friend</span>
             </label>
         </div>
+        <?php endif; ?>
 
-        <div class="section-title">Referral Details (Optional)</div>
+        <?php if ($fields['referral']['visible']): ?>
+        <div class="section-title">Referral Details <?= $fields['referral']['required'] ? '<span class="req-star">*</span>' : '(Optional)' ?></div>
         <div class="row form-group">
             <div>
-                <label for="reg_ref_name">Reference Person Name</label>
-                <input type="text" id="reg_ref_name" name="reference_person_name" placeholder="Name of referring person">
+                <label for="reg_ref_name">Reference Person Name <?= $fields['referral']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="text" id="reg_ref_name" name="reference_person_name" <?= $fields['referral']['required'] ? 'required' : '' ?> value="<?= e($_POST['reference_person_name'] ?? '') ?>" placeholder="Name of referring person">
             </div>
             <div>
-                <label for="reg_ref_mobile">Reference Mobile No.</label>
-                <input type="tel" id="reg_ref_mobile" name="reference_mobile" placeholder="Reference mobile number">
+                <label for="reg_ref_mobile">Reference Mobile No. <?= $fields['referral']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="tel" id="reg_ref_mobile" name="reference_mobile" <?= $fields['referral']['required'] ? 'required' : '' ?> value="<?= e($_POST['reference_mobile'] ?? '') ?>" placeholder="Reference mobile number">
             </div>
         </div>
+        <?php endif; ?>
 
-        <div class="section-title">Guardian Details (For Admission Form)</div>
+        <?php if ($fields['guardian']['visible']): ?>
+        <div class="section-title">Guardian Details (For Admission Form) <?= $fields['guardian']['required'] ? '<span class="req-star">*</span>' : '' ?></div>
         <div class="row form-group">
             <div>
-                <label for="reg_guard_name">Guardian Name</label>
-                <input type="text" id="reg_guard_name" name="guardian_signature_name" placeholder="Parent / Spouse / Guardian name">
+                <label for="reg_guard_name">Guardian Name <?= $fields['guardian']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="text" id="reg_guard_name" name="guardian_signature_name" <?= $fields['guardian']['required'] ? 'required' : '' ?> value="<?= e($_POST['guardian_signature_name'] ?? '') ?>" placeholder="Parent / Spouse / Guardian name">
             </div>
             <div>
-                <label for="reg_guard_rel">Relation</label>
-                <input type="text" id="reg_guard_rel" name="guardian_relation" placeholder="e.g. Father / Husband / Mother">
+                <label for="reg_guard_rel">Relation <?= $fields['guardian']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
+                <input type="text" id="reg_guard_rel" name="guardian_relation" <?= $fields['guardian']['required'] ? 'required' : '' ?> value="<?= e($_POST['guardian_relation'] ?? '') ?>" placeholder="e.g. Father / Husband / Mother">
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="reg-submit-footer">
             <div>
@@ -399,10 +451,16 @@ require_once __DIR__ . '/../includes/layout_header.php';
 </div>
 
 <script>
+const anyBatchEl = document.getElementById('any_batch');
+const batchSelectEl = document.getElementById('batchSelect');
+if (anyBatchEl && batchSelectEl) {
+    batchSelectEl.disabled = anyBatchEl.checked;
+}
+
 const photoInput = document.getElementById('photoInput');
 const cropModal = document.getElementById('cropModal');
 const cropCanvas = document.getElementById('cropCanvas');
-const ctx = cropCanvas.getContext('2d');
+const ctx = cropCanvas ? cropCanvas.getContext('2d') : null;
 const zoomSlider = document.getElementById('zoomSlider');
 const canvasWrapper = document.getElementById('canvasWrapper');
 const croppedPhotoData = document.getElementById('croppedPhotoData');
@@ -422,84 +480,91 @@ const FRAME_H = 251;
 const FRAME_X = 52;
 const FRAME_Y = 24;
 
-photoInput.addEventListener('change', function(e) {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-        const file = files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            img = new Image();
-            img.onload = function() {
-                const minScale = Math.max(FRAME_W / img.width, FRAME_H / img.height);
-                scale = minScale;
-                zoomSlider.min = (minScale * 0.5).toFixed(2);
-                zoomSlider.max = (minScale * 4.0).toFixed(2);
-                zoomSlider.value = minScale;
+if (photoInput) {
+    photoInput.addEventListener('change', function(e) {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            const file = files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                img = new Image();
+                img.onload = function() {
+                    const minScale = Math.max(FRAME_W / img.width, FRAME_H / img.height);
+                    scale = minScale;
+                    zoomSlider.min = (minScale * 0.5).toFixed(2);
+                    zoomSlider.max = (minScale * 4.0).toFixed(2);
+                    zoomSlider.value = minScale;
 
-                posX = FRAME_X + (FRAME_W - img.width * scale) / 2;
-                posY = FRAME_Y + (FRAME_H - img.height * scale) / 2;
+                    posX = FRAME_X + (FRAME_W - img.width * scale) / 2;
+                    posY = FRAME_Y + (FRAME_H - img.height * scale) / 2;
 
-                cropModal.style.display = 'flex';
-                draw();
+                    cropModal.style.display = 'flex';
+                    draw();
+                };
+                img.src = event.target.result;
             };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
-});
+            reader.readAsDataURL(file);
+        }
+    });
+}
 
 function draw() {
+    if (!ctx) return;
     ctx.clearRect(0, 0, 300, 300);
     ctx.drawImage(img, posX, posY, img.width * scale, img.height * scale);
 }
 
-zoomSlider.addEventListener('input', function() {
-    const newScale = parseFloat(this.value);
-    const centerX = FRAME_X + FRAME_W / 2;
-    const centerY = FRAME_Y + FRAME_H / 2;
-    posX = centerX - (centerX - posX) * (newScale / scale);
-    posY = centerY - (centerY - posY) * (newScale / scale);
-    scale = newScale;
-    draw();
-});
-
-canvasWrapper.addEventListener('mousedown', function(e) {
-    isDragging = true;
-    startX = e.clientX - posX;
-    startY = e.clientY - posY;
-});
-
-window.addEventListener('mousemove', function(e) {
-    if (isDragging) {
-        posX = e.clientX - startX;
-        posY = e.clientY - startY;
+if (zoomSlider) {
+    zoomSlider.addEventListener('input', function() {
+        const newScale = parseFloat(this.value);
+        const centerX = FRAME_X + FRAME_W / 2;
+        const centerY = FRAME_Y + FRAME_H / 2;
+        posX = centerX - (centerX - posX) * (newScale / scale);
+        posY = centerY - (centerY - posY) * (newScale / scale);
+        scale = newScale;
         draw();
-    }
-});
+    });
+}
 
-window.addEventListener('mouseup', function() {
-    isDragging = false;
-});
-
-canvasWrapper.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 1) {
+if (canvasWrapper) {
+    canvasWrapper.addEventListener('mousedown', function(e) {
         isDragging = true;
-        startX = e.touches[0].clientX - posX;
-        startY = e.touches[0].clientY - posY;
-    }
-});
+        startX = e.clientX - posX;
+        startY = e.clientY - posY;
+    });
 
-window.addEventListener('touchmove', function(e) {
-    if (isDragging && e.touches.length === 1) {
-        posX = e.touches[0].clientX - startX;
-        posY = e.touches[0].clientY - startY;
-        draw();
-    }
-});
+    window.addEventListener('mousemove', function(e) {
+        if (isDragging) {
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
+            draw();
+        }
+    });
 
-window.addEventListener('touchend', function() {
-    isDragging = false;
-});
+    window.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+
+    canvasWrapper.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 1) {
+            isDragging = true;
+            startX = e.touches[0].clientX - posX;
+            startY = e.touches[0].clientY - posY;
+        }
+    });
+
+    window.addEventListener('touchmove', function(e) {
+        if (isDragging && e.touches.length === 1) {
+            posX = e.touches[0].clientX - startX;
+            posY = e.touches[0].clientY - startY;
+            draw();
+        }
+    });
+
+    window.addEventListener('touchend', function() {
+        isDragging = false;
+    });
+}
 
 function closeCropModal() {
     cropModal.style.display = 'none';

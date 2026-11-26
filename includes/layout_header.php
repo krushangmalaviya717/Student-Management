@@ -11,13 +11,14 @@ $isStudentsNav = str_contains($currentScript, 'students_list.php')
     || str_contains($currentScript, 'edit_student.php');
 $cssFile = __DIR__ . '/../public/assets/css/app.css';
 $cssVer = file_exists($cssFile) ? (string)filemtime($cssFile) : '1';
+$businessName = get_setting('business_name', 'Devangi Sewing Classes');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= e($pageTitle) ?> - Devangi Sewing Classes</title>
+<title><?= e($pageTitle) ?> - <?= e($businessName) ?></title>
 <link rel="stylesheet" href="<?= url('public/assets/css/app.css?v=' . $cssVer) ?>">
 </head>
 <body>
@@ -25,7 +26,12 @@ $cssVer = file_exists($cssFile) ? (string)filemtime($cssFile) : '1';
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
     <aside class="sidebar" id="appSidebar" aria-label="Main navigation">
         <div class="sidebar-header">
-            <div class="brand">Devangi<span>Sewing Classes</span></div>
+            <?php
+            $brandParts = explode(' ', trim($businessName), 2);
+            $brandMain = $brandParts[0] ?? 'Devangi';
+            $brandSub = $brandParts[1] ?? '';
+            ?>
+            <div class="brand"><?= e($brandMain) ?><?php if ($brandSub !== ''): ?><span><?= e($brandSub) ?></span><?php endif; ?></div>
             <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close navigation">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>

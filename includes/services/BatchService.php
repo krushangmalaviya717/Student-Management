@@ -92,7 +92,7 @@ class BatchService
         $days = trim($data['batch_days'] ?? 'Mon-Sat');
         $startTime = $data['start_time'] ?? '';
         $endTime = $data['end_time'] ?? '';
-        $capacity = (int)($data['capacity'] ?? 8);
+        $capacity = (int)($data['capacity'] ?? get_setting('default_batch_capacity', 8));
         $isActive = !empty($data['is_active']) ? 1 : 0;
 
         if (empty($name)) {
@@ -131,7 +131,7 @@ class BatchService
         $days = trim($data['batch_days'] ?? 'Mon-Sat');
         $startTime = $data['start_time'] ?? '';
         $endTime = $data['end_time'] ?? '';
-        $capacity = (int)($data['capacity'] ?? 8);
+        $capacity = (int)($data['capacity'] ?? get_setting('default_batch_capacity', 8));
         $isActive = !empty($data['is_active']) ? 1 : 0;
 
         if (empty($name)) {
