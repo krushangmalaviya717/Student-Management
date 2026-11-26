@@ -7,20 +7,41 @@
 // Step 1: Load environment variables
 require_once __DIR__ . '/env.php';
 
-// Step 2: Database constants (loaded strictly from .env without hardcoded secrets)
-define('DB_HOST', env('DB_HOST', '127.0.0.1'));
-define('DB_PORT', env('DB_PORT', '3306'));
-define('DB_NAME', env('DB_NAME', 'devangi_sms'));
-define('DB_USER', env('DB_USER', 'root'));
-define('DB_PASS', (string) env('DB_PASS', ''));
-define('DB_CHARSET', env('DB_CHARSET', 'utf8mb4'));
+// Step 2: Environment Auto-Detection (Local vs Hostinger Live Server)
+$isLiveServer = (
+    (!empty($_SERVER['HTTP_HOST']) && strpos($_SERVER['HTTP_HOST'], 'devangistudent.com') !== false) ||
+    (!empty($_SERVER['SERVER_NAME']) && strpos($_SERVER['SERVER_NAME'], 'devangistudent.com') !== false) ||
+    (strpos(__DIR__, 'public_html') !== false)
+);
 
-// Step 3: Application settings
-define('APP_NAME', env('APP_NAME', 'Devangi Sewing Classes - Student Management'));
-define('APP_ENV', env('APP_ENV', 'production'));
-define('APP_DEBUG', filter_var(env('APP_DEBUG', false), FILTER_VALIDATE_BOOLEAN));
+if ($isLiveServer) {
+    // Live Server (Hostinger - devangistudent.com)
+    define('DB_HOST', 'localhost');
+    define('DB_PORT', '3306');
+    define('DB_NAME', 'u594881892_devangistudent');
+    define('DB_USER', 'u594881892_devangistudent');
+    define('DB_PASS', 'Krushang@972');
+    define('DB_CHARSET', 'utf8mb4');
+
+    define('APP_NAME', 'Devangi Sewing Classes - Student Management');
+    define('APP_ENV', 'production');
+    define('APP_DEBUG', false);
+} else {
+    // Local Development (XAMPP / Localhost)
+    define('DB_HOST', env('DB_HOST', '127.0.0.1'));
+    define('DB_PORT', env('DB_PORT', '3306'));
+    define('DB_NAME', env('DB_NAME', 'devangi_sms'));
+    define('DB_USER', env('DB_USER', 'root'));
+    define('DB_PASS', (string) env('DB_PASS', 'Krushang@972'));
+    define('DB_CHARSET', env('DB_CHARSET', 'utf8mb4'));
+
+    define('APP_NAME', env('APP_NAME', 'Devangi Sewing Classes - Student Management (Local)'));
+    define('APP_ENV', 'local');
+    define('APP_DEBUG', true);
+}
+
 define('APP_TIMEZONE', env('APP_TIMEZONE', 'Asia/Kolkata'));
-define('API_SECRET_KEY', (string) env('API_SECRET_KEY', ''));
+define('API_SECRET_KEY', (string) env('API_SECRET_KEY', 'devangi_secret_api_key_2026'));
 
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 if (!empty($_SERVER['HTTP_HOST'])) {
