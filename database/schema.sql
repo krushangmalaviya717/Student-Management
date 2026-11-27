@@ -148,6 +148,12 @@ CREATE TABLE IF NOT EXISTS students (
     is_imported TINYINT(1) NOT NULL DEFAULT 0,  -- migrated/historical record flag
     is_temporary TINYINT(1) NOT NULL DEFAULT 0, -- manually created temporary unrecorded student
 
+    -- Locked Fee Structure (snapshotted at registration time to protect past students from future price increases)
+    form_fee_amount DECIMAL(10,2) DEFAULT NULL,
+    joining_fee_amount DECIMAL(10,2) DEFAULT NULL,
+    second_payment_amount DECIMAL(10,2) DEFAULT NULL,
+    total_course_fee DECIMAL(10,2) DEFAULT NULL,
+
     FOREIGN KEY (preferred_batch_id) REFERENCES batches(id),
     FOREIGN KEY (joined_batch_id) REFERENCES batches(id),
     FOREIGN KEY (created_by) REFERENCES users(id),

@@ -114,17 +114,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
+                $snapFormFee = (float)get_setting('form_fee', 500);
+                $snapJoiningFee = (float)get_setting('joining_fee', 3500);
+                $snapSecondPayment = (float)get_setting('second_payment_amount', 4000);
+                $snapTotalCourseFee = $snapFormFee + $snapJoiningFee + $snapSecondPayment;
+
                 $stmtStudent = $pdo->prepare("
                     INSERT INTO students (
                         form_no, registration_no, form_submit_date, form_status,
                         name, student_mobile, address,
                         joined_batch_id, preferred_batch_id,
-                        status, is_temporary, created_by, created_at
+                        status, is_temporary, created_by, created_at,
+                        form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee
                     ) VALUES (
                         ?, ?, ?, 'confirmed',
                         ?, ?, ?,
                         ?, ?,
-                        'draft', 1, ?, NOW()
+                        'draft', 1, ?, NOW(),
+                        ?, ?, ?, ?
                     )
                 ");
                 $stmtStudent->execute([
@@ -136,7 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $address,
                     $batchIdVal,
                     $batchIdVal,
-                    (int)$user['id']
+                    (int)$user['id'],
+                    $snapFormFee,
+                    $snapJoiningFee,
+                    $snapSecondPayment,
+                    $snapTotalCourseFee
                 ]);
                 $studentId = (int)$pdo->lastInsertId();
             }

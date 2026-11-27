@@ -91,9 +91,9 @@ function load_all_settings(bool $forceReload = false): array
         if (($map['_settings_v2_ready'] ?? '') !== '1') {
             ensure_settings_initialized($pdo, $map);
         }
-        if (($map['_schema_v4_ready'] ?? '') !== '1') {
+        if (($map['_schema_v5_ready'] ?? '') !== '1') {
             ensure_database_schema_ready($pdo);
-            $map['_schema_v4_ready'] = '1';
+            $map['_schema_v5_ready'] = '1';
             $GLOBALS['_APP_SETTINGS_CACHE'] = $map;
         }
     }
@@ -139,6 +139,57 @@ function ensure_database_schema_ready(PDO $pdo): void
         if (!in_array('guardian_relation', $studentCols, true)) {
             $pdo->exec("ALTER TABLE students ADD COLUMN guardian_relation VARCHAR(50) DEFAULT NULL");
         }
+        if (!in_array('form_fee_amount', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN form_fee_amount DECIMAL(10,2) DEFAULT NULL");
+        }
+        if (!in_array('joining_fee_amount', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN joining_fee_amount DECIMAL(10,2) DEFAULT NULL");
+        }
+        if (!in_array('second_payment_amount', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN second_payment_amount DECIMAL(10,2) DEFAULT NULL");
+        }
+        if (!in_array('total_course_fee', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN total_course_fee DECIMAL(10,2) DEFAULT NULL");
+        }
+
+        // Backfill existing students to permanently lock their fee structure
+        // 1. If student already paid joining fee, lock that as their joining_fee_amount
+        $pdo->exec("
+            UPDATE students s
+            JOIN (
+                SELECT student_id, MAX(amount) as paid_joining 
+                FROM payments 
+                WHERE stage = 'joining_fee' AND status = 'success' 
+                GROUP BY student_id
+            ) p ON s.id = p.student_id
+            SET s.joining_fee_amount = p.paid_joining
+            WHERE s.joining_fee_amount IS NULL
+        ");
+
+        // 2. Ankita Nitinbhai (Registration DSC-F-00001 / ID 1) registered under original Rs. 8,000 course fees:
+        $pdo->exec("
+            UPDATE students 
+            SET form_fee_amount = 500.00,
+                joining_fee_amount = 3500.00,
+                second_payment_amount = 4000.00,
+                total_course_fee = 8000.00
+            WHERE (form_no = 'DSC-F-00001' OR id = 1) AND (joining_fee_amount IS NULL OR joining_fee_amount = 4500.00)
+        ");
+
+        // 3. For any other students with unassigned fee locks, lock them to current active settings
+        $currForm = (float)get_setting('form_fee', 500);
+        $currJoining = (float)get_setting('joining_fee', 4500);
+        $currSecond = (float)get_setting('second_payment_amount', 5000);
+        $currTotal = $currForm + $currJoining + $currSecond;
+
+        $pdo->exec("
+            UPDATE students 
+            SET form_fee_amount = COALESCE(form_fee_amount, {$currForm}),
+                joining_fee_amount = COALESCE(joining_fee_amount, {$currJoining}),
+                second_payment_amount = COALESCE(second_payment_amount, {$currSecond}),
+                total_course_fee = COALESCE(total_course_fee, {$currTotal})
+            WHERE joining_fee_amount IS NULL OR total_course_fee IS NULL
+        ");
 
         // 2. Ensure student_notices table exists
         $pdo->exec("CREATE TABLE IF NOT EXISTS student_notices (
@@ -202,7 +253,7 @@ function ensure_database_schema_ready(PDO $pdo): void
         // 6. Record migration done in settings
         $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, setting_group, description)
-            VALUES ('_schema_v4_ready', '1', 'system', 'Auto-migration complete for all tables and columns')
+            VALUES ('_schema_v5_ready', '1', 'system', 'Auto-migration complete for all tables, columns, and locked student fees')
             ON DUPLICATE KEY UPDATE setting_value = '1'
         ")->execute();
 

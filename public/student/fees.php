@@ -29,11 +29,11 @@ foreach ($payments as $p) {
     }
 }
 
-// Course fee settings
-$formFeeAmt = (float)get_setting('form_fee', 500);
-$joiningFeeAmt = (float)get_setting('joining_fee', 3500);
-$secondPaymentAmt = (float)get_setting('second_payment_amount', 4000);
-$totalCourseFee = $formFeeAmt + $joiningFeeAmt + $secondPaymentAmt;
+// Student's locked course fee structure (protects from subsequent setting price increases)
+$formFeeAmt = !empty($s['form_fee_amount']) ? (float)$s['form_fee_amount'] : (float)get_setting('form_fee', 500);
+$joiningFeeAmt = !empty($s['joining_fee_amount']) ? (float)$s['joining_fee_amount'] : (float)get_setting('joining_fee', 3500);
+$secondPaymentAmt = !empty($s['second_payment_amount']) ? (float)$s['second_payment_amount'] : (float)get_setting('second_payment_amount', 4000);
+$totalCourseFee = !empty($s['total_course_fee']) ? (float)$s['total_course_fee'] : ($formFeeAmt + $joiningFeeAmt + $secondPaymentAmt);
 
 // Query extensions joined with invoices
 $extQuery = db()->prepare("

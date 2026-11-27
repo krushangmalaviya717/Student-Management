@@ -122,7 +122,12 @@ class PaymentService
     public static function getStudentFeeLedger(int $studentId): array
     {
         $pdo = db();
-        $stStmt = $pdo->prepare("SELECT id, name, form_no, registration_no, entry_date, expected_joining_date, status, form_status FROM students WHERE id = ?");
+        $stStmt = $pdo->prepare("
+            SELECT id, name, form_no, registration_no, entry_date, expected_joining_date, status, form_status,
+                   form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee
+            FROM students 
+            WHERE id = ?
+        ");
         $stStmt->execute([$studentId]);
         $student = $stStmt->fetch();
 
@@ -130,11 +135,11 @@ class PaymentService
             throw new RuntimeException("Student record not found (ID: {$studentId}).");
         }
 
-        // Standard Fee Configuration from Settings
-        $formFeeAmt = (float)get_setting('form_fee', 500);
-        $joiningFeeAmt = (float)get_setting('joining_fee', 3500);
-        $secondPaymentAmt = (float)get_setting('second_payment_amount', 4000);
-        $totalCourseFee = $formFeeAmt + $joiningFeeAmt + $secondPaymentAmt;
+        // Student's Locked Fee Structure (protects past students from subsequent setting fee increases)
+        $formFeeAmt = !empty($student['form_fee_amount']) ? (float)$student['form_fee_amount'] : (float)get_setting('form_fee', 500);
+        $joiningFeeAmt = !empty($student['joining_fee_amount']) ? (float)$student['joining_fee_amount'] : (float)get_setting('joining_fee', 3500);
+        $secondPaymentAmt = !empty($student['second_payment_amount']) ? (float)$student['second_payment_amount'] : (float)get_setting('second_payment_amount', 4000);
+        $totalCourseFee = !empty($student['total_course_fee']) ? (float)$student['total_course_fee'] : ($formFeeAmt + $joiningFeeAmt + $secondPaymentAmt);
 
         // Fetch all successful payments for this student
         $pStmt = $pdo->prepare("
@@ -564,12 +569,13 @@ class PaymentService
     public static function getAllPendingDues(): array
     {
         $pdo = db();
-        $joiningFeeAmt = (float)get_setting('joining_fee', 3500);
-        $secondPaymentAmt = (float)get_setting('second_payment_amount', 4000);
+        $defaultJoiningFee = (float)get_setting('joining_fee', 3500);
+        $defaultSecondPayment = (float)get_setting('second_payment_amount', 4000);
         $dueDays = (int)get_setting('second_payment_due_days', 10);
 
         $students = $pdo->query("
-            SELECT id, name, registration_no, form_no, student_mobile, entry_date, expected_joining_date, status 
+            SELECT id, name, registration_no, form_no, student_mobile, entry_date, expected_joining_date, status,
+                   form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee 
             FROM students 
             WHERE status IN ('confirmed', 'waiting_ready', 'joining_confirmed', 'active', 'extended', 'course_completed')
               AND is_temporary = 0
@@ -580,6 +586,8 @@ class PaymentService
 
         foreach ($students as $st) {
             $stId = (int)$st['id'];
+            $joiningFeeAmt = !empty($st['joining_fee_amount']) ? (float)$st['joining_fee_amount'] : $defaultJoiningFee;
+            $secondPaymentAmt = !empty($st['second_payment_amount']) ? (float)$st['second_payment_amount'] : $defaultSecondPayment;
 
             // Get paid amounts by stage
             $stmtP = $pdo->prepare("SELECT stage, SUM(amount) as paid_amount FROM payments WHERE student_id = ? AND status = 'success' GROUP BY stage");

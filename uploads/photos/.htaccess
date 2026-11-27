@@ -1,0 +1,10 @@
+# Prevent any uploaded file from ever being executed as a script.
+<FilesMatch "\.(php|php\d|phtml|pl|py|cgi|asp|aspx)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

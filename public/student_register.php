@@ -35,6 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $anyBatch = isset($_POST['any_batch']) ? 1 : 0;
         $preferredBatch = $anyBatch ? null : ($_POST['preferred_batch_id'] ?: null);
 
+        // Snapshot currently active course fee rates into student profile permanently
+        $snapFormFee = (float)get_setting('form_fee', 500);
+        $snapJoiningFee = (float)get_setting('joining_fee', 3500);
+        $snapSecondPayment = (float)get_setting('second_payment_amount', 4000);
+        $snapTotalCourseFee = $snapFormFee + $snapJoiningFee + $snapSecondPayment;
+
         $pdo->beginTransaction();
         $formNo = generate_form_no();
         $stmt = $pdo->prepare(
@@ -42,8 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 (form_no, form_submit_date, form_status, name, age, student_mobile,
                  husband_father_mobile, home_mobile, education, address,
                  knows_sewing, previous_sewing_work, hear_about_us, guardian_signature_name, guardian_relation,
-                 preferred_batch_id, any_batch, photo_path, status, created_by)
-             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)"
+                 preferred_batch_id, any_batch, photo_path, status, created_by,
+                 form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee)
+             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?,
+                 ?, ?, ?, ?)"
         );
         $stmt->execute([
             $formNo,
@@ -63,6 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $anyBatch,
             $photoPath,
             current_user()['id'],
+            $snapFormFee,
+            $snapJoiningFee,
+            $snapSecondPayment,
+            $snapTotalCourseFee
         ]);
         $studentId = (int)$pdo->lastInsertId();
 

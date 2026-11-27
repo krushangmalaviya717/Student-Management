@@ -163,15 +163,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $status = 'active';
                     }
 
+                    $snapFormFee = (float)get_setting('form_fee', 500);
+                    $snapJoiningFee = (float)get_setting('joining_fee', 3500);
+                    $snapSecondPayment = (float)get_setting('second_payment_amount', 4000);
+                    $snapTotalCourseFee = $snapFormFee + $snapJoiningFee + $snapSecondPayment;
+
                     $stmt = $pdo->prepare(
                         "INSERT INTO students
                             (form_no, registration_no, form_submit_date, form_status, confirmed_at,
                              name, age, student_mobile, husband_father_mobile, home_mobile, address,
                              knows_sewing, previous_sewing_work, joined_batch_id, preferred_batch_id,
                              entry_date, base_expiry_date, final_expiry_date, course_status, status,
-                             is_imported, created_by, created_at)
+                             is_imported, created_by, created_at,
+                             form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee)
                          VALUES
-                            (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())"
+                            (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NOW(),
+                             ?, ?, ?, ?)"
                     );
                     $formStatus = ($regNo || in_array($status, ['active', 'extended', 'course_completed'])) ? 'confirmed' : 'draft';
                     $confirmedAt = $formStatus === 'confirmed' ? ($entryDate ?: date('Y-m-d H:i:s')) : null;
@@ -197,7 +204,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $expiryDate,
                         $courseStatus,
                         $status,
-                        current_user()['id']
+                        current_user()['id'],
+                        $snapFormFee,
+                        $snapJoiningFee,
+                        $snapSecondPayment,
+                        $snapTotalCourseFee
                     ]);
                     $newStudentId = (int)$pdo->lastInsertId();
 

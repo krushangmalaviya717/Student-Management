@@ -143,8 +143,8 @@ $currentRate = get_current_extension_rate();
 
 $pendingDuesList = [];
 if (in_array($student['status'], ['joining_confirmed', 'active', 'extended', 'course_completed'])) {
-    $joiningFeeAmt = (float)get_setting('joining_fee', 3500);
-    $secondPaymentAmt = (float)get_setting('second_payment_amount', 4000);
+    $joiningFeeAmt = !empty($student['joining_fee_amount']) ? (float)$student['joining_fee_amount'] : (float)get_setting('joining_fee', 3500);
+    $secondPaymentAmt = !empty($student['second_payment_amount']) ? (float)$student['second_payment_amount'] : (float)get_setting('second_payment_amount', 4000);
     $dueDays = (int)get_setting('second_payment_due_days', 10);
 
     $paidByStage = [];
