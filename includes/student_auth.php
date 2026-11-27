@@ -17,6 +17,9 @@ function student_remember_secret(): string
 
 function set_student_remember_cookie(int $studentId, string $passwordHash): void
 {
+    if (headers_sent()) {
+        return;
+    }
     $expires = time() + (STUDENT_REMEMBER_DAYS * 86400);
     $pwSlice = substr($passwordHash, 0, 16);
     $payload = $studentId . '|' . $expires;
@@ -34,13 +37,15 @@ function set_student_remember_cookie(int $studentId, string $passwordHash): void
 
 function clear_student_remember_cookie(): void
 {
-    setcookie(STUDENT_REMEMBER_COOKIE, '', [
-        'expires'  => time() - 3600,
-        'path'     => '/',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
+    if (!headers_sent()) {
+        setcookie(STUDENT_REMEMBER_COOKIE, '', [
+            'expires'  => time() - 3600,
+            'path'     => '/',
+            'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
     unset($_COOKIE[STUDENT_REMEMBER_COOKIE]);
 }
 

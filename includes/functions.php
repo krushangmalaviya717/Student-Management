@@ -91,8 +91,124 @@ function load_all_settings(bool $forceReload = false): array
         if (($map['_settings_v2_ready'] ?? '') !== '1') {
             ensure_settings_initialized($pdo, $map);
         }
+        if (($map['_schema_v4_ready'] ?? '') !== '1') {
+            ensure_database_schema_ready($pdo);
+            $map['_schema_v4_ready'] = '1';
+            $GLOBALS['_APP_SETTINGS_CACHE'] = $map;
+        }
     }
     return $GLOBALS['_APP_SETTINGS_CACHE'];
+}
+
+function ensure_database_schema_ready(PDO $pdo): void
+{
+    static $executed = false;
+    if ($executed) return;
+    $executed = true;
+
+    try {
+        // 1. Ensure students table has password_hash and lifecycle columns
+        $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('password_hash', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN password_hash VARCHAR(255) DEFAULT NULL AFTER student_mobile");
+        }
+        if (!in_array('is_paused', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN is_paused TINYINT(1) NOT NULL DEFAULT 0");
+        }
+        if (!in_array('paused_at', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN paused_at DATE DEFAULT NULL");
+        }
+        if (!in_array('paused_remaining_days', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN paused_remaining_days INT DEFAULT 0");
+        }
+        if (!in_array('resume_ready_date', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN resume_ready_date DATE DEFAULT NULL");
+        }
+        if (!in_array('pause_reason', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN pause_reason TEXT DEFAULT NULL");
+        }
+        if (!in_array('is_temporary', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN is_temporary TINYINT(1) NOT NULL DEFAULT 0");
+        }
+        if (!in_array('hear_about_us', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN hear_about_us VARCHAR(100) DEFAULT NULL");
+        }
+        if (!in_array('guardian_signature_name', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN guardian_signature_name VARCHAR(150) DEFAULT NULL");
+        }
+        if (!in_array('guardian_relation', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN guardian_relation VARCHAR(50) DEFAULT NULL");
+        }
+
+        // 2. Ensure student_notices table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS student_notices (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            content TEXT NOT NULL,
+            batch_id INT UNSIGNED DEFAULT NULL,
+            priority ENUM('normal','important','urgent') NOT NULL DEFAULT 'normal',
+            created_by INT UNSIGNED DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_student_notices_batch (batch_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 3. Ensure student_leave_requests table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS student_leave_requests (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            student_id INT UNSIGNED NOT NULL,
+            leave_type ENUM('leave','extension','re_course') NOT NULL DEFAULT 'leave',
+            start_date DATE NOT NULL,
+            end_date DATE DEFAULT NULL,
+            total_days INT UNSIGNED DEFAULT 1,
+            reason TEXT NOT NULL,
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            admin_note TEXT DEFAULT NULL,
+            reviewed_by INT UNSIGNED DEFAULT NULL,
+            reviewed_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_leave_student (student_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 4. Ensure payments table has notes and is_manual
+        $paymentCols = $pdo->query("SHOW COLUMNS FROM payments")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('is_manual', $paymentCols, true)) {
+            $pdo->exec("ALTER TABLE payments ADD COLUMN is_manual TINYINT(1) NOT NULL DEFAULT 0");
+        }
+        if (!in_array('notes', $paymentCols, true)) {
+            $pdo->exec("ALTER TABLE payments ADD COLUMN notes VARCHAR(255) DEFAULT NULL");
+        }
+
+        // 5. Ensure payment_otps table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS payment_otps (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            otp_code VARCHAR(10) NOT NULL,
+            context ENUM('payment','manual_receipt','delete_payment') NOT NULL DEFAULT 'payment',
+            student_name VARCHAR(150) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            stage_label VARCHAR(150) NOT NULL,
+            method VARCHAR(50) NOT NULL,
+            details_json TEXT DEFAULT NULL,
+            sent_to_1 VARCHAR(20) DEFAULT NULL,
+            sent_to_2 VARCHAR(20) DEFAULT NULL,
+            status ENUM('pending','verified','expired') NOT NULL DEFAULT 'pending',
+            requested_by INT UNSIGNED DEFAULT NULL,
+            expires_at DATETIME NOT NULL,
+            verified_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_otp_code_status (otp_code, status),
+            INDEX idx_otp_expires (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 6. Record migration done in settings
+        $pdo->prepare("
+            INSERT INTO settings (setting_key, setting_value, setting_group, description)
+            VALUES ('_schema_v4_ready', '1', 'system', 'Auto-migration complete for all tables and columns')
+            ON DUPLICATE KEY UPDATE setting_value = '1'
+        ")->execute();
+
+    } catch (Throwable $e) {
+        // Non-fatal fallback
+    }
 }
 
 function ensure_settings_initialized(PDO $pdo, array &$cache): void

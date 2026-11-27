@@ -25,33 +25,55 @@ $isJoined = !empty($s['entry_date']) || !empty($s['joined_batch_id']) || in_arra
 $isCourseCompleted = ($s['status'] === 'course_completed' || ($s['course_status'] ?? '') === 'completed');
 
 // Fetch total extension days
-$stmtExt = db()->prepare("SELECT COALESCE(SUM(extension_days), 0) FROM extensions WHERE student_id = ?");
-$stmtExt->execute([$studentId]);
-$totalExtensionDays = (int)$stmtExt->fetchColumn();
+$totalExtensionDays = 0;
+try {
+    $stmtExt = db()->prepare("SELECT COALESCE(SUM(extension_days), 0) FROM extensions WHERE student_id = ?");
+    $stmtExt->execute([$studentId]);
+    $totalExtensionDays = (int)$stmtExt->fetchColumn();
+} catch (Throwable $e) {
+    $totalExtensionDays = 0;
+}
 
 // Fallback check from base and final expiry dates
 if ($totalExtensionDays === 0 && !empty($s['base_expiry_date']) && !empty($s['final_expiry_date'])) {
-    $bDate = new DateTime($s['base_expiry_date']);
-    $fDate = new DateTime($s['final_expiry_date']);
-    if ($fDate > $bDate) {
-        $diff = $bDate->diff($fDate)->days;
-        if ($diff > 0) $totalExtensionDays = $diff;
-    }
+    try {
+        $bDate = new DateTime($s['base_expiry_date']);
+        $fDate = new DateTime($s['final_expiry_date']);
+        if ($fDate > $bDate) {
+            $diff = $bDate->diff($fDate)->days;
+            if ($diff > 0) $totalExtensionDays = $diff;
+        }
+    } catch (Throwable $e) {}
 }
 
 // Fee calculation
-$stmtFees = db()->prepare("SELECT SUM(amount) FROM payments WHERE student_id = ? AND status = 'success'");
-$stmtFees->execute([$studentId]);
-$totalPaid = (float)($stmtFees->fetchColumn() ?: 0);
+$totalPaid = 0;
+try {
+    $stmtFees = db()->prepare("SELECT SUM(amount) FROM payments WHERE student_id = ? AND status = 'success'");
+    $stmtFees->execute([$studentId]);
+    $totalPaid = (float)($stmtFees->fetchColumn() ?: 0);
+} catch (Throwable $e) {
+    $totalPaid = 0;
+}
 
 // Balance due check
-$invStmt = db()->prepare("SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE student_id = ? AND (payment_status != 'paid' OR payment_status IS NULL)");
-$invStmt->execute([$studentId]);
-$balanceDue = (float)$invStmt->fetchColumn();
+$balanceDue = 0;
+try {
+    $invStmt = db()->prepare("SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE student_id = ? AND (payment_status != 'paid' OR payment_status IS NULL)");
+    $invStmt->execute([$studentId]);
+    $balanceDue = (float)$invStmt->fetchColumn();
+} catch (Throwable $e) {
+    $balanceDue = 0;
+}
 
-$stmtNotice = db()->prepare("SELECT * FROM student_notices WHERE batch_id IS NULL OR batch_id = ? ORDER BY created_at DESC LIMIT 1");
-$stmtNotice->execute([$s['joined_batch_id']]);
-$latestNotice = $stmtNotice->fetch();
+$latestNotice = null;
+try {
+    $stmtNotice = db()->prepare("SELECT * FROM student_notices WHERE batch_id IS NULL OR batch_id = ? ORDER BY created_at DESC LIMIT 1");
+    $stmtNotice->execute([$s['joined_batch_id'] ?? null]);
+    $latestNotice = $stmtNotice->fetch() ?: null;
+} catch (Throwable $e) {
+    $latestNotice = null;
+}
 
 $statusLabels = [
     'draft' => ['લુક' => 'badge-draft', 'ટેક્સ્ટ' => 'Draft'],

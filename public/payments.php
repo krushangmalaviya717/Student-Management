@@ -410,11 +410,11 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     <label for="stageSelect">Payment Stage *</label>
                     <select name="stage" id="stageSelect" required onchange="onStageChange()">
                         <option value="">-- Select Student First --</option>
-                        <option value="joining_fee" id="opt_joining_fee">1st Payment on Joining (₹3,500)</option>
-                        <option value="second_payment" id="opt_second_payment">2nd Payment (₹4,000)</option>
-                        <option value="form_fee" id="opt_form_fee">Form Fee (₹500)</option>
-                        <option value="extension_fee" id="opt_extension_fee">Extension Fee</option>
-                        <option value="other" id="opt_other">Other / Miscellaneous Fee</option>
+                        <option value="joining_fee" id="opt_joining_fee" data-base-label="1st Payment on Joining">1st Payment on Joining</option>
+                        <option value="second_payment" id="opt_second_payment" data-base-label="2nd Payment">2nd Payment</option>
+                        <option value="form_fee" id="opt_form_fee" data-base-label="Form Fee">Form Fee</option>
+                        <option value="extension_fee" id="opt_extension_fee" data-base-label="Extension Fee">Extension Fee</option>
+                        <option value="other" id="opt_other" data-base-label="Other / Miscellaneous Fee">Other / Miscellaneous Fee</option>
                     </select>
                 </div>
 
@@ -949,12 +949,22 @@ function updateStageOption(elementId, stageData) {
     var opt = document.getElementById(elementId);
     if (!opt) return;
 
+    var base = opt.getAttribute('data-base-label') || opt.innerText.replace(/\s*\(₹[0-9,.]+\)/g, '').replace(' [ALREADY PAID]', '').trim();
+    opt.setAttribute('data-base-label', base);
+
+    var amtText = '';
+    if (stageData && stageData.due_amount !== undefined && stageData.due_amount > 0) {
+        amtText = ' (₹' + Number(stageData.due_amount).toLocaleString('en-IN') + ')';
+    } else if (stageData && stageData.required_amount !== undefined && stageData.required_amount > 0) {
+        amtText = ' (₹' + Number(stageData.required_amount).toLocaleString('en-IN') + ')';
+    }
+
     if (stageData.is_paid || !stageData.is_allowed) {
         opt.disabled = true;
-        opt.innerText = opt.innerText.replace(' [ALREADY PAID]', '') + ' [ALREADY PAID]';
+        opt.innerText = base + amtText + ' [ALREADY PAID]';
     } else {
         opt.disabled = false;
-        opt.innerText = opt.innerText.replace(' [ALREADY PAID]', '');
+        opt.innerText = base + amtText;
     }
 }
 
