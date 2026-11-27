@@ -36,7 +36,7 @@ function is_admin_or_above(): bool
 function require_login(): void
 {
     if (!is_logged_in()) {
-        redirect('public/login.php');
+        redirect('devangi-admin-717/');
         exit;
     }
 }

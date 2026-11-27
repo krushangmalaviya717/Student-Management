@@ -121,7 +121,7 @@ Student-Management/
    ```
 4. Access the application:
    - Student Portal (User Side / Main URL): `http://localhost:8000/` (opens `public/student/login.php`, Mobile: `9725340354`)
-   - Class Admin Panel (Separate, Staff/Admin Only): `http://localhost:8000/devangi-admin-717` or `http://localhost:8000/public/login.php` (Login: `admin@example.com` / `admin123`)
+   - Class Admin Panel (Separate, Staff/Admin Only): `http://localhost:8000/devangi-admin-717` (Login: `admin@example.com` / `admin123`)
    - API Gateway: `http://localhost:8000/api/index.php`
 
 ---
