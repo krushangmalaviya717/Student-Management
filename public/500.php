@@ -68,7 +68,20 @@
         </div>
         <h1>Something went wrong</h1>
         <p>An unexpected server error occurred. Please try again in a few moments or contact your system administrator.</p>
-        <a href="dashboard.php" class="btn">Go to Dashboard</a>
+        <?php
+        $baseUrl = defined('APP_URL') ? rtrim(APP_URL, '/') : '';
+        if (isset($_SESSION['user'])) {
+            $homeHref = $baseUrl . '/public/dashboard.php';
+            $homeLabel = 'Go to Dashboard';
+        } elseif (isset($_SESSION['student'])) {
+            $homeHref = $baseUrl . '/public/student/dashboard.php';
+            $homeLabel = 'Go to Dashboard';
+        } else {
+            $homeHref = $baseUrl . '/public/student/login.php';
+            $homeLabel = 'Go to Login';
+        }
+        ?>
+        <a href="<?= htmlspecialchars($homeHref, ENT_QUOTES, 'UTF-8') ?>" class="btn"><?= $homeLabel ?></a>
     </div>
 </body>
 </html>

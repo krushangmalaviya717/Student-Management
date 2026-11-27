@@ -23,14 +23,14 @@ $businessName = get_setting('business_name', 'Devangi Sewing Classes');
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login - <?= e($businessName) ?></title>
+<title>Class Admin Login - <?= e($businessName) ?></title>
 <link rel="stylesheet" href="<?= url('public/assets/css/app.css') ?>">
 </head>
 <body>
 <div class="login-wrap">
   <div class="login-card">
     <h1><?= e($businessName) ?></h1>
-    <p>Sign in to access the Student Management Admin Panel.</p>
+    <p>Class Administration Portal — Authorized staff &amp; admin only.</p>
     <?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
     <form method="post">
         <?= csrf_field() ?>

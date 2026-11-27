@@ -52,17 +52,17 @@ echo "🔑 ADMIN LOGIN DETAILS:\n";
 echo "   Email:    admin@example.com\n";
 echo "   Password: admin123\n\n";
 
-echo "🔗 1. ADMIN PANEL (એડમિન સાઈડ):\n";
-echo "   💻 PC:     http://localhost:8000/public/login.php\n";
+echo "🔗 1. STUDENT PORTAL (યુઝર / સ્ટુડન્ટ સાઈડ):\n";
+echo "   💻 PC:     http://localhost:8000/\n";
 if ($localIp && $localIp !== '127.0.0.1') {
-    echo "   📱 Mobile: http://{$localIp}:8000/public/login.php\n";
+    echo "   📱 Mobile: http://{$localIp}:8000/\n";
 }
 echo "\n";
 
-echo "🔗 2. STUDENT REGISTRATION (સ્ટુડન્ટ સાઈડ):\n";
-echo "   💻 PC:     http://localhost:8000/public/student_register.php\n";
+echo "🔗 2. CLASS ADMIN PANEL (ફક્ત ક્લાસ / એડમિન માટે અલગ):\n";
+echo "   💻 PC:     http://localhost:8000/devangi-admin-717\n";
 if ($localIp && $localIp !== '127.0.0.1') {
-    echo "   📱 Mobile: http://{$localIp}:8000/public/student_register.php\n";
+    echo "   📱 Mobile: http://{$localIp}:8000/devangi-admin-717\n";
 }
 echo "\n";
 

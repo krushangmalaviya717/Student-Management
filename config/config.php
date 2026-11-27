@@ -46,7 +46,7 @@ define('API_SECRET_KEY', (string) env('API_SECRET_KEY', 'devangi_secret_api_key_
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 if (!empty($_SERVER['HTTP_HOST'])) {
     $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-    $baseFolder = preg_replace('#/(public|api|config|includes).*$#', '', $scriptDir);
+    $baseFolder = preg_replace('#/(public|api|config|includes|devangi-admin-717|student)(/.*)?$#', '', $scriptDir);
     $baseFolder = ($baseFolder === '/' || $baseFolder === '.') ? '' : $baseFolder;
     define('APP_URL', "$protocol://" . $_SERVER['HTTP_HOST'] . $baseFolder);
 } else {

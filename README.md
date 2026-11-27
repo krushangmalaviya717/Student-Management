@@ -120,8 +120,8 @@ Student-Management/
    C:\xampp\php\php.exe start.php
    ```
 4. Access the application:
-   - Admin Panel: `http://localhost:8000/public/login.php` (Login: `admin@example.com` / `admin123`)
-   - Student Portal: `http://localhost:8000/public/student/login.php` (Mobile: `9725340354`)
+   - Student Portal (User Side / Main URL): `http://localhost:8000/` (opens `public/student/login.php`, Mobile: `9725340354`)
+   - Class Admin Panel (Separate, Staff/Admin Only): `http://localhost:8000/devangi-admin-717` or `http://localhost:8000/public/login.php` (Login: `admin@example.com` / `admin123`)
    - API Gateway: `http://localhost:8000/api/index.php`
 
 ---

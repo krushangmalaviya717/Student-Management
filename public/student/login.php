@@ -1,6 +1,8 @@
 <?php
 $pageTitle = 'સ્ટુડન્ટ લોગિન - Devangi Classes';
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/student_auth.php';
 
 if (is_student_logged_in()) {
     redirect('public/student/dashboard.php');
@@ -19,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+
+require_once __DIR__ . '/includes/header.php';
 ?>
 
 <div class="login-screen">
