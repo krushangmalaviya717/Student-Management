@@ -708,4 +708,61 @@ class StudentService
             'guardian_relation' => $guardianRelation !== '' ? $guardianRelation : null,
         ];
     }
+
+    /**
+     * Permanently delete a student and all dependent records inside a transaction
+     */
+    public static function deleteStudent(int $studentId, int $actorId): array
+    {
+        if ($studentId <= 0) {
+            throw new InvalidArgumentException('Invalid student ID.');
+        }
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare("SELECT * FROM students WHERE id = ? FOR UPDATE");
+            $stmt->execute([$studentId]);
+            $student = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$student) {
+                throw new RuntimeException('Student record not found.');
+            }
+
+            // Delete child records in foreign-key-safe order
+            $pdo->prepare("
+                DELETE eli FROM extension_line_items eli
+                INNER JOIN extensions e ON eli.extension_id = e.id
+                WHERE e.student_id = ?
+            ")->execute([$studentId]);
+
+            $pdo->prepare("DELETE FROM invoices WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM payments WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM extensions WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM course_adjustments WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM call_logs WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM waiting_queue WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM student_batch_history WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM student_photos WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("UPDATE referrals SET relative_student_id = NULL WHERE relative_student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM referrals WHERE student_id = ?")->execute([$studentId]);
+            $pdo->prepare("DELETE FROM student_leave_requests WHERE student_id = ?")->execute([$studentId]);
+
+            $pdo->prepare("DELETE FROM students WHERE id = ?")->execute([$studentId]);
+
+            log_audit('student', $studentId, 'delete_student', $student, [
+                'deleted_by' => $actorId,
+                'name' => $student['name'],
+                'form_no' => $student['form_no'],
+                'registration_no' => $student['registration_no']
+            ]);
+
+            $pdo->commit();
+            return $student;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
 }

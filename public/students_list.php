@@ -5,6 +5,22 @@ require_once __DIR__ . '/../includes/services/StudentService.php';
 require_once __DIR__ . '/../includes/services/BatchService.php';
 require_login();
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_student') {
+    verify_csrf();
+    if (!is_admin_or_above()) {
+        flash('error', 'Only administrators can delete student records.');
+        redirect('public/students_list.php?' . http_build_query($_GET));
+    }
+    try {
+        $delId = (int)($_POST['student_id'] ?? 0);
+        $deleted = StudentService::deleteStudent($delId, (int)current_user()['id']);
+        flash('success', "Student '{$deleted['name']}' ({$deleted['form_no']}) deleted permanently.");
+    } catch (Throwable $e) {
+        flash('error', 'Could not delete student: ' . $e->getMessage());
+    }
+    redirect('public/students_list.php?' . http_build_query($_GET));
+}
+
 $q = trim($_GET['q'] ?? '');
 $status = $_GET['status'] ?? 'active_students';
 $batchId = $_GET['batch_id'] ?? '';
@@ -233,6 +249,12 @@ require_once __DIR__ . '/../includes/layout_header.php';
                         <div class="action-group" style="justify-content: flex-end;">
                             <a href="<?= url('public/student_profile.php?id=' . (int)$s['id']) ?>" class="btn btn-sm">Profile</a>
                             <a href="<?= url('public/manual_receipt.php?student_id=' . (int)$s['id']) ?>" class="btn btn-sm btn-secondary" title="Issue Receipt">+ Receipt</a>
+                            <form method="post" style="display:inline;" onsubmit="return confirm('Delete student <?= e(addslashes($s['name'])) ?> (<?= e($s['form_no']) ?>)? All their payments, queue entries, and records will be permanently removed.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="delete_student">
+                                <input type="hidden" name="student_id" value="<?= (int)$s['id'] ?>">
+                                <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;" title="Delete Student">Delete</button>
+                            </form>
                         </div>
                         <?php else: ?>
                             <span class="muted" style="font-size: 12px;">View Only</span>

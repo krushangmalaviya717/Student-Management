@@ -430,6 +430,44 @@ class PaymentService
             // 3. Delete the payment record
             $pdo->prepare("DELETE FROM payments WHERE id = ?")->execute([$paymentId]);
 
+            // 3b. Safety Rollback: if a form_fee payment was deleted and remaining form_fee < required,
+            // revert student back to draft and remove from waiting_queue so unpaid students don't stay confirmed/queued
+            if ($stage === 'form_fee' && $studentId > 0) {
+                $stChk = $pdo->prepare("SELECT id, status, form_status, registration_no, form_fee_amount FROM students WHERE id = ? FOR UPDATE");
+                $stChk->execute([$studentId]);
+                $stRow = $stChk->fetch(PDO::FETCH_ASSOC);
+
+                if ($stRow) {
+                    $remStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE student_id = ? AND stage = 'form_fee' AND status = 'success'");
+                    $remStmt->execute([$studentId]);
+                    $remFormPaid = (float)$remStmt->fetchColumn();
+
+                    $reqFormFee = !empty($stRow['form_fee_amount']) ? (float)$stRow['form_fee_amount'] : (float)get_setting('form_fee', 500);
+
+                    if ($remFormPaid < $reqFormFee && !in_array($stRow['status'], ['active', 'extended', 'course_completed'], true)) {
+                        $pdo->prepare("
+                            UPDATE students 
+                            SET form_status = 'draft',
+                                confirmed_at = NULL,
+                                registration_no = NULL,
+                                status = 'draft'
+                            WHERE id = ?
+                        ")->execute([$studentId]);
+
+                        $pdo->prepare("DELETE FROM waiting_queue WHERE student_id = ? AND state != 'joined'")
+                            ->execute([$studentId]);
+
+                        log_audit('student', $studentId, 'revert_form_confirmation', [
+                            'previous_status' => $stRow['status'],
+                            'previous_form_status' => $stRow['form_status'],
+                            'previous_registration_no' => $stRow['registration_no']
+                        ], [
+                            'reason' => 'Form fee payment deleted; reverted to draft and removed from waiting queue'
+                        ]);
+                    }
+                }
+            }
+
             // 4. Log audit trail
             log_audit('payment', $paymentId, 'delete_payment', $payment, [
                 'deleted_by' => $actorId,
