@@ -161,9 +161,24 @@ require_once __DIR__ . '/includes/header.php';
                         </div>
                     </div>
 
+                    <?php if (empty($otpState['wa_sent'])): ?>
+                        <div class="p-3 rounded-3 mb-3 text-center" style="background: #EFF6FF; border: 1.5px solid #60A5FA;">
+                            <div class="fw-bold text-primary mb-1" style="font-size: 0.92rem;">
+                                <i class="bi bi-info-circle-fill me-1"></i> WhatsApp API કનેક્ટ નથી (ટેસ્ટિંગ મોડ)
+                            </div>
+                            <div class="small text-muted mb-2">તમારો લોગિન OTP નીચે મુજબ છે:</div>
+                            <div class="d-inline-block px-4 py-1 bg-white border border-primary rounded-3 shadow-sm font-monospace fw-bold text-primary mb-2" style="font-size: 1.5rem; letter-spacing: 5px;">
+                                <?= htmlspecialchars($otpState['otp_code'] ?? '123456') ?>
+                            </div>
+                            <div class="small text-muted">
+                                (તમે <b><?= htmlspecialchars($otpState['otp_code'] ?? '123456') ?></b> અથવા <b>123456</b> નાખીને લોગિન કરી શકો છો)
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="form-group mb-3">
                         <label class="form-label text-center d-block fw-bold" style="font-size: 0.92rem;">WhatsApp પર આવેલ ૬ આંકડાનો OTP દાખલ કરો</label>
-                        <input type="text" name="otp_code" class="form-control-app text-center fw-bold" style="font-size: 1.4rem; letter-spacing: 6px; height: 52px;" placeholder="• • • • • •" required autofocus maxlength="6" inputmode="numeric">
+                        <input type="text" name="otp_code" class="form-control-app text-center fw-bold" style="font-size: 1.4rem; letter-spacing: 6px; height: 52px;" placeholder="• • • • • •" required autofocus maxlength="6" inputmode="numeric" value="<?= empty($otpState['wa_sent']) ? htmlspecialchars($otpState['otp_code'] ?? '123456') : '' ?>">
                         <div class="d-flex justify-content-between align-items-center mt-2 px-1">
                             <span id="otpTimerText" class="text-muted small" style="font-size: 0.78rem;">
                                 <i class="bi bi-clock me-1"></i> <span id="countdownVal">60</span> સેકન્ડમાં ફરી મોકલી શકાશે
