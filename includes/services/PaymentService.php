@@ -123,7 +123,7 @@ class PaymentService
     {
         $pdo = db();
         $stStmt = $pdo->prepare("
-            SELECT id, name, form_no, registration_no, entry_date, expected_joining_date, status, form_status,
+            SELECT id, name, form_no, registration_no, entry_date, expected_joining_date, status, form_status, is_imported,
                    form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee
             FROM students 
             WHERE id = ?
@@ -163,8 +163,8 @@ class PaymentService
         $paidExtension = $paidByStage['extension_fee']['amount'] ?? ($paidByStage['extension']['amount'] ?? 0.0);
         $paidOther = $paidByStage['other']['amount'] ?? 0.0;
 
-        // Stage 1: Form Fee
-        $isFormPaid = ($paidForm >= $formFeeAmt) || ($student['form_status'] === 'confirmed');
+        // Stage 1: Form Fee (only trust form_status='confirmed' without payment row for legacy imported students)
+        $isFormPaid = ($paidForm >= $formFeeAmt) || (!empty($student['is_imported']) && $student['form_status'] === 'confirmed');
         $formDue = $isFormPaid ? 0.0 : max(0.0, $formFeeAmt - $paidForm);
 
         // Stage 2: Joining Fee
