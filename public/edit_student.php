@@ -65,6 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $_POST['status'] ?? $student['status'];
         $joined_batch_id = !empty($_POST['joined_batch_id']) ? (int)$_POST['joined_batch_id'] : null;
 
+        // Custom Fee Structure fields
+        $form_fee_amount = isset($_POST['form_fee_amount']) && $_POST['form_fee_amount'] !== '' ? max(0.0, (float)$_POST['form_fee_amount']) : $student['form_fee_amount'];
+        $joining_fee_amount = isset($_POST['joining_fee_amount']) && $_POST['joining_fee_amount'] !== '' ? max(0.0, (float)$_POST['joining_fee_amount']) : $student['joining_fee_amount'];
+        $second_payment_amount = isset($_POST['second_payment_amount']) && $_POST['second_payment_amount'] !== '' ? max(0.0, (float)$_POST['second_payment_amount']) : $student['second_payment_amount'];
+        $total_course_fee = ($form_fee_amount !== null || $joining_fee_amount !== null || $second_payment_amount !== null)
+            ? ((float)$form_fee_amount + (float)$joining_fee_amount + (float)$second_payment_amount)
+            : $student['total_course_fee'];
+
         $pdo->beginTransaction();
 
         $sql = "UPDATE students SET 
@@ -73,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 hear_about_us = ?, guardian_signature_name = ?, guardian_relation = ?, photo_path = ?,
                 form_no = ?, registration_no = ?, 
                 entry_date = ?, final_expiry_date = ?, status = ?, joined_batch_id = ?,
+                form_fee_amount = ?, joining_fee_amount = ?, second_payment_amount = ?, total_course_fee = ?,
                 updated_at = NOW()
                 WHERE id = ?";
 
@@ -97,6 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $final_expiry_date,
             $status,
             $joined_batch_id,
+            $form_fee_amount,
+            $joining_fee_amount,
+            $second_payment_amount,
+            $total_course_fee,
             $id
         ]);
 
@@ -348,6 +361,22 @@ require_once __DIR__ . '/../includes/layout_header.php';
                         </option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+        </div>
+
+        <div class="section-title">Course Fee Structure (કસ્ટમ ફી ફાળવણી)</div>
+        <div class="row form-group">
+            <div>
+                <label for="edit_form_fee">1. Form Fee (₹)</label>
+                <input type="number" step="0.01" min="0" id="edit_form_fee" name="form_fee_amount" value="<?= e($_POST['form_fee_amount'] ?? (!empty($student['form_fee_amount']) ? $student['form_fee_amount'] : '500')) ?>">
+            </div>
+            <div>
+                <label for="edit_joining_fee">2. 1st Joining Fee (₹)</label>
+                <input type="number" step="0.01" min="0" id="edit_joining_fee" name="joining_fee_amount" value="<?= e($_POST['joining_fee_amount'] ?? (!empty($student['joining_fee_amount']) ? $student['joining_fee_amount'] : '3500')) ?>">
+            </div>
+            <div>
+                <label for="edit_second_fee">3. 2nd Payment (₹)</label>
+                <input type="number" step="0.01" min="0" id="edit_second_fee" name="second_payment_amount" value="<?= e($_POST['second_payment_amount'] ?? (!empty($student['second_payment_amount']) ? $student['second_payment_amount'] : '4000')) ?>">
             </div>
         </div>
 

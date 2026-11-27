@@ -246,14 +246,14 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     </td>
                     <td class="text-right" style="white-space: nowrap;">
                         <?php if (is_admin_or_above()): ?>
-                        <div class="action-group" style="justify-content: flex-end;">
-                            <a href="<?= url('public/student_profile.php?id=' . (int)$s['id']) ?>" class="btn btn-sm">Profile</a>
-                            <a href="<?= url('public/manual_receipt.php?student_id=' . (int)$s['id']) ?>" class="btn btn-sm btn-secondary" title="Issue Receipt">+ Receipt</a>
-                            <form method="post" style="display:inline;" onsubmit="return confirm('Delete student <?= e(addslashes($s['name'])) ?> (<?= e($s['form_no']) ?>)? All their payments, queue entries, and records will be permanently removed.');">
+                        <div class="action-group" style="display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px;">
+                            <a href="<?= url('public/student_profile.php?id=' . (int)$s['id']) ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Profile</a>
+                            <a href="<?= url('public/manual_receipt.php?student_id=' . (int)$s['id']) ?>" class="btn btn-sm btn-secondary" style="padding: 5px 10px; font-size: 12px;" title="Issue Receipt">+ Receipt</a>
+                            <form method="post" style="display: inline-flex; margin: 0;" onsubmit="return confirm('Delete student <?= e(addslashes($s['name'])) ?> (<?= e($s['form_no']) ?>)? All their payments, queue entries, and records will be permanently removed.');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete_student">
                                 <input type="hidden" name="student_id" value="<?= (int)$s['id'] ?>">
-                                <button type="submit" class="btn btn-sm" style="background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;" title="Delete Student">Delete</button>
+                                <button type="submit" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px; background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;" title="Delete Student">Delete</button>
                             </form>
                         </div>
                         <?php else: ?>

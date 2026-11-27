@@ -113,6 +113,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'reopen_course') {
             StudentService::reopenCourse($id, (int)current_user()['id']);
             flash('success', 'Student status reopened to Active.');
+        } elseif ($action === 'update_student_fees') {
+            if (!is_admin_or_above()) {
+                throw new RuntimeException('Only administrators can update student fees.');
+            }
+            $newFormFee = max(0.0, (float)($_POST['form_fee_amount'] ?? 500));
+            $newJoiningFee = max(0.0, (float)($_POST['joining_fee_amount'] ?? 3500));
+            $newSecondPayment = max(0.0, (float)($_POST['second_payment_amount'] ?? 4000));
+            $newTotalFee = $newFormFee + $newJoiningFee + $newSecondPayment;
+            $feeReason = trim($_POST['fee_update_reason'] ?? '');
+
+            $pdo->prepare("
+                UPDATE students 
+                SET form_fee_amount = ?,
+                    joining_fee_amount = ?,
+                    second_payment_amount = ?,
+                    total_course_fee = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ")->execute([$newFormFee, $newJoiningFee, $newSecondPayment, $newTotalFee, $id]);
+
+            log_audit('student', $id, 'update_fee_structure', [
+                'old_form_fee' => $student['form_fee_amount'],
+                'old_joining_fee' => $student['joining_fee_amount'],
+                'old_second_payment' => $student['second_payment_amount'],
+                'old_total_fee' => $student['total_course_fee'],
+            ], [
+                'new_form_fee' => $newFormFee,
+                'new_joining_fee' => $newJoiningFee,
+                'new_second_payment' => $newSecondPayment,
+                'new_total_fee' => $newTotalFee,
+                'reason' => $feeReason,
+                'updated_by' => current_user()['id']
+            ]);
+
+            flash('success', "Student fee structure updated: 1st Joining ₹" . number_format($newJoiningFee) . ", 2nd Payment ₹" . number_format($newSecondPayment) . " (Total ₹" . number_format($newTotalFee) . ").");
         }
         redirect('public/student_profile.php?id=' . $id);
     } catch (Throwable $e) {
@@ -673,11 +708,90 @@ require_once __DIR__ . '/../includes/layout_header.php';
                     <small class="muted">Fee stages collected and pending dues for this student.</small>
                 </div>
                 <div class="action-group">
+                    <?php if (is_admin_or_above()): ?>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="document.getElementById('editFeeModal').style.display='flex';" title="Edit Student Fee Structure">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <span>Change Fees (ફી બદલો)</span>
+                    </button>
+                    <?php endif; ?>
                     <?php foreach (['form_fee'=>'Form','joining_fee'=>'Joining','second_payment'=>'2nd Pay','extension_fee'=>'Extensions'] as $k=>$label): ?>
                         <span class="badge badge-gray"><?= $label ?>: ₹<?= number_format($paymentSummary[$k]['total'] ?? 0, 0) ?></span>
                     <?php endforeach; ?>
                 </div>
             </div>
+
+            <!-- Student Applied Fee Structure Summary Box -->
+            <?php
+            $curStFormFee = !empty($student['form_fee_amount']) ? (float)$student['form_fee_amount'] : (float)get_setting('form_fee', 500);
+            $curStJoiningFee = !empty($student['joining_fee_amount']) ? (float)$student['joining_fee_amount'] : (float)get_setting('joining_fee', 3500);
+            $curStSecondPay = !empty($student['second_payment_amount']) ? (float)$student['second_payment_amount'] : (float)get_setting('second_payment_amount', 4000);
+            $curStTotalCourse = !empty($student['total_course_fee']) ? (float)$student['total_course_fee'] : ($curStFormFee + $curStJoiningFee + $curStSecondPay);
+            ?>
+            <div style="background: #F8FAFC; border: 1px solid var(--border-light); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 12.5px;">
+                    <span style="font-weight: 700; color: var(--text);">Applied Fees:</span>
+                    <span>Form: <strong>₹<?= number_format($curStFormFee) ?></strong></span>
+                    <span>1st Joining: <strong style="color: var(--primary);">₹<?= number_format($curStJoiningFee) ?></strong></span>
+                    <span>2nd Payment: <strong style="color: var(--primary);">₹<?= number_format($curStSecondPay) ?></strong></span>
+                    <span>Total Course Fee: <strong style="color: var(--success); font-size: 13.5px;">₹<?= number_format($curStTotalCourse) ?></strong></span>
+                </div>
+                <?php if (is_admin_or_above()): ?>
+                <button type="button" class="btn btn-sm btn-secondary" style="padding: 3px 8px; font-size: 11.5px;" onclick="document.getElementById('editFeeModal').style.display='flex';">Edit</button>
+                <?php endif; ?>
+            </div>
+
+            <!-- Modal: Edit Student Fee Structure -->
+            <div id="editFeeModal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:16px;">
+                <div style="background:#fff; border-radius:12px; width:100%; max-width:440px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.2); overflow:hidden; border:1px solid #e2e8f0;">
+                    <div style="padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+                        <h3 style="margin:0; font-size:15px; font-weight:700; color:#0f172a;">Change Student Fee Structure</h3>
+                        <button type="button" onclick="document.getElementById('editFeeModal').style.display='none';" style="background:none; border:none; font-size:20px; line-height:1; cursor:pointer; color:#64748b;">&times;</button>
+                    </div>
+                    <form method="post" action="" style="padding:18px;">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="update_student_fees">
+
+                        <div style="margin-bottom:12px;">
+                            <label style="display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; color:#334155;">1. Form Fee (₹)</label>
+                            <input type="number" step="0.01" min="0" name="form_fee_amount" id="fee_modal_form" class="form-control" style="width:100%; font-size:13px;" required value="<?= e($curStFormFee) ?>" oninput="calcModalTotalFee()">
+                        </div>
+
+                        <div style="margin-bottom:12px;">
+                            <label style="display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; color:#334155;">2. 1st Joining Fee (₹)</label>
+                            <input type="number" step="0.01" min="0" name="joining_fee_amount" id="fee_modal_joining" class="form-control" style="width:100%; font-size:13px;" required value="<?= e($curStJoiningFee) ?>" oninput="calcModalTotalFee()">
+                        </div>
+
+                        <div style="margin-bottom:12px;">
+                            <label style="display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; color:#334155;">3. 2nd Payment / Final Installment (₹)</label>
+                            <input type="number" step="0.01" min="0" name="second_payment_amount" id="fee_modal_second" class="form-control" style="width:100%; font-size:13px;" required value="<?= e($curStSecondPay) ?>" oninput="calcModalTotalFee()">
+                        </div>
+
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:12.5px; font-weight:700; color:#1e3a8a;">New Total Course Fee:</span>
+                            <span id="fee_modal_total_display" style="font-size:15px; font-weight:800; color:#1e3a8a;">₹0</span>
+                        </div>
+
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#64748b;">Reason for Fee Change (Optional)</label>
+                            <input type="text" name="fee_update_reason" class="form-control" style="width:100%; font-size:12.5px;" placeholder="e.g. Special concession, revised package">
+                        </div>
+
+                        <div style="display:flex; justify-content:flex-end; gap:8px;">
+                            <button type="button" onclick="document.getElementById('editFeeModal').style.display='none';" class="btn btn-sm btn-secondary">Cancel</button>
+                            <button type="submit" class="btn btn-sm">Save Fee Structure</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <script>
+            function calcModalTotalFee() {
+                var f = parseFloat(document.getElementById('fee_modal_form').value) || 0;
+                var j = parseFloat(document.getElementById('fee_modal_joining').value) || 0;
+                var s = parseFloat(document.getElementById('fee_modal_second').value) || 0;
+                document.getElementById('fee_modal_total_display').textContent = '₹' + (f + j + s).toLocaleString('en-IN');
+            }
+            calcModalTotalFee();
+            </script>
 
             <?php if (!empty($pendingDuesList)): ?>
             <div class="dues-callout">
