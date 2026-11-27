@@ -91,9 +91,9 @@ function load_all_settings(bool $forceReload = false): array
         if (($map['_settings_v2_ready'] ?? '') !== '1') {
             ensure_settings_initialized($pdo, $map);
         }
-        if (($map['_schema_v5_ready'] ?? '') !== '1') {
+        if (($map['_schema_v6_ready'] ?? '') !== '1') {
             ensure_database_schema_ready($pdo);
-            $map['_schema_v5_ready'] = '1';
+            $map['_schema_v6_ready'] = '1';
             $GLOBALS['_APP_SETTINGS_CACHE'] = $map;
         }
     }
@@ -250,10 +250,26 @@ function ensure_database_schema_ready(PDO $pdo): void
             INDEX idx_otp_expires (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        // 6. Record migration done in settings
+        // 6. Ensure student_login_otps table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS student_login_otps (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            student_id INT UNSIGNED NOT NULL,
+            mobile VARCHAR(20) NOT NULL,
+            otp_code VARCHAR(10) NOT NULL,
+            status ENUM('pending', 'verified', 'expired') NOT NULL DEFAULT 'pending',
+            sent_via ENUM('whatsapp', 'system') NOT NULL DEFAULT 'whatsapp',
+            response_msg VARCHAR(255) DEFAULT NULL,
+            expires_at DATETIME NOT NULL,
+            verified_at DATETIME DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_login_otp_lookup (mobile, otp_code, status),
+            INDEX idx_login_otp_expiry (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 7. Record migration done in settings
         $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, setting_group, description)
-            VALUES ('_schema_v5_ready', '1', 'system', 'Auto-migration complete for all tables, columns, and locked student fees')
+            VALUES ('_schema_v6_ready', '1', 'system', 'Auto-migration complete for all tables, columns, and student login OTP')
             ON DUPLICATE KEY UPDATE setting_value = '1'
         ")->execute();
 

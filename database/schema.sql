@@ -578,3 +578,22 @@ CREATE TABLE IF NOT EXISTS student_notices (
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_notice_batch (batch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------
+-- 20. STUDENT LOGIN OTPS (WhatsApp Login)
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_login_otps (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id INT UNSIGNED NOT NULL,
+    mobile VARCHAR(20) NOT NULL,
+    otp_code VARCHAR(10) NOT NULL,
+    status ENUM('pending', 'verified', 'expired') NOT NULL DEFAULT 'pending',
+    sent_via ENUM('whatsapp', 'system') NOT NULL DEFAULT 'whatsapp',
+    response_msg VARCHAR(255) DEFAULT NULL,
+    expires_at DATETIME NOT NULL,
+    verified_at DATETIME DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    INDEX idx_login_otp_lookup (mobile, otp_code, status),
+    INDEX idx_login_otp_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

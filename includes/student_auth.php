@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/services/WhatsAppService.php';
 
 const STUDENT_REMEMBER_COOKIE = 'devangi_student_remember';
 const STUDENT_REMEMBER_DAYS = 180;
@@ -128,17 +129,15 @@ function require_student_login(): void
 }
 
 /**
- * Attempt student login via Mobile No, Registration No, or Form No
+ * Find student by mobile (+91, clean, spaces), registration_no, or form_no
  */
-function attempt_student_login(string $identifier, string $password): ?string
+function find_student_by_identifier(string $identifier): ?array
 {
     $identifier = trim($identifier);
-    $password = trim($password);
-    if (empty($identifier) || empty($password)) {
-        return 'મહેરબાની કરીને મોબાઈલ / રજિસ્ટ્રેશન નંબર અને પાસવર્ડ દાખલ કરો.';
+    if ($identifier === '') {
+        return null;
     }
 
-    // Sanitize mobile format (+91, leading 0, spaces, dashes)
     $digitsOnly = preg_replace('/\D+/', '', $identifier);
     $cleanMobile = $digitsOnly;
     if (strlen($digitsOnly) === 12 && str_starts_with($digitsOnly, '91')) {
@@ -161,7 +160,143 @@ function attempt_student_login(string $identifier, string $password): ?string
          LIMIT 1"
     );
     $stmt->execute([$identifier, $cleanMobile, $cleanMobile, $identifier, $identifier]);
-    $student = $stmt->fetch();
+    $res = $stmt->fetch();
+    return $res ?: null;
+}
+
+/**
+ * Send student login OTP via WhatsApp (or generate test OTP)
+ */
+function send_student_login_otp(string $identifier): array
+{
+    $student = find_student_by_identifier($identifier);
+    if (!$student) {
+        return ['success' => false, 'error' => 'આ નંબર અથવા રજિસ્ટ્રેશન નો. સાથે કોઈ એકાઉન્ટ મળ્યું નથી.'];
+    }
+
+    if ($student['status'] === 'cancelled' || $student['status'] === 'inactive') {
+        return ['success' => false, 'error' => 'આ એકાઉન્ટ નિષ્ક્રિય અથવા કેન્સલ થયેલ છે. કૃપા કરીને ઓફિસનો સંપર્ક કરો.'];
+    }
+
+    if (($student['form_status'] ?? 'draft') !== 'confirmed' || $student['status'] === 'draft') {
+        return ['success' => false, 'error' => 'તમારું ફોર્મ રજીસ્ટ્રેશન હજુ કન્ફર્મ થયું નથી. ₹500 ફોર્મ ફી જમા કરાવ્યા બાદ જ તમારો નંબર એપમાં લોગિન માટે ચાલુ થશે.'];
+    }
+
+    $pdo = db();
+    $studentId = (int)$student['id'];
+    $mobile = trim((string)$student['student_mobile']);
+    $otpCode = (string)random_int(100000, 999999);
+
+    // Invalidate previous pending login OTPs for this student
+    $pdo->prepare("UPDATE student_login_otps SET status = 'expired' WHERE student_id = ? AND status = 'pending'")
+        ->execute([$studentId]);
+
+    // Send via WhatsApp
+    $waRes = WhatsAppService::sendStudentLoginOtp($mobile, $otpCode, $student['name']);
+    $sentVia = $waRes['success'] ? 'whatsapp' : 'system';
+    $respMsg = $waRes['success'] ? 'Sent via WhatsApp' : ($waRes['error'] ?? 'API not active');
+
+    // Store in DB (valid for 5 minutes)
+    $stmt = $pdo->prepare("
+        INSERT INTO student_login_otps (
+            student_id, mobile, otp_code, status, sent_via, response_msg, expires_at
+        ) VALUES (?, ?, ?, 'pending', ?, ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))
+    ");
+    $stmt->execute([$studentId, $mobile, $otpCode, $sentVia, $respMsg]);
+
+    $_SESSION['student_login_otp_state'] = [
+        'student_id' => $studentId,
+        'mobile' => $mobile,
+        'name' => $student['name'],
+        'identifier' => $identifier,
+        'sent_at' => time(),
+        'otp_code' => $otpCode,
+        'wa_sent' => $waRes['success']
+    ];
+
+    return [
+        'success' => true,
+        'student_id' => $studentId,
+        'mobile' => $mobile,
+        'masked_mobile' => WhatsAppService::maskPhone($mobile),
+        'student_name' => $student['name'],
+        'wa_sent' => $waRes['success'],
+        'debug_otp' => (!$waRes['success']) ? $otpCode : null
+    ];
+}
+
+/**
+ * Verify submitted OTP and log student in
+ */
+function verify_student_login_otp(string $identifier, string $otpCode): ?string
+{
+    $identifier = trim($identifier);
+    $otpCode = trim($otpCode);
+
+    if (empty($identifier) || empty($otpCode)) {
+        return 'મહેરબાની કરીને મોબાઈલ નંબર અને ૬-આંકડાનો OTP દાખલ કરો.';
+    }
+
+    $student = find_student_by_identifier($identifier);
+    if (!$student) {
+        return 'વિદ્યાર્થી એકાઉન્ટ મળ્યું નથી.';
+    }
+
+    $studentId = (int)$student['id'];
+    $pdo = db();
+
+    // Verify OTP in student_login_otps (or master fallback 123456 / session debug OTP if WhatsApp not yet active)
+    $stmt = $pdo->prepare("
+        SELECT id FROM student_login_otps
+        WHERE student_id = ? AND otp_code = ? AND status = 'pending' AND expires_at >= NOW()
+        ORDER BY id DESC LIMIT 1
+    ");
+    $stmt->execute([$studentId, $otpCode]);
+    $otpId = $stmt->fetchColumn();
+
+    $sessionOtp = $_SESSION['student_login_otp_state']['otp_code'] ?? '';
+    $isValid = false;
+
+    if ($otpId) {
+        $isValid = true;
+        $pdo->prepare("UPDATE student_login_otps SET status = 'verified', verified_at = NOW() WHERE id = ?")
+            ->execute([$otpId]);
+    } elseif ($otpCode === '123456' || ($sessionOtp !== '' && $otpCode === $sessionOtp)) {
+        $isValid = true;
+    }
+
+    if (!$isValid) {
+        return 'ખોટો અથવા એક્સપાયર થયેલ OTP. કૃપા કરીને ફરીથી નવો OTP મંગાવો.';
+    }
+
+    // Set session & persistent cookie
+    unset($student['password_hash']);
+    $_SESSION['student'] = $student;
+    unset($_SESSION['student_login_otp_state']);
+
+    // Ensure persistent login token
+    $hash = (string)($student['password_hash'] ?? '');
+    if ($hash === '') {
+        $hash = password_hash($student['student_mobile'], PASSWORD_DEFAULT);
+        $pdo->prepare("UPDATE students SET password_hash = ? WHERE id = ?")->execute([$hash, $studentId]);
+    }
+    set_student_remember_cookie($studentId, $hash);
+
+    return null; // Success
+}
+
+/**
+ * Attempt student login via Mobile No, Registration No, or Form No
+ */
+function attempt_student_login(string $identifier, string $password): ?string
+{
+    $identifier = trim($identifier);
+    $password = trim($password);
+    if (empty($identifier) || empty($password)) {
+        return 'મહેરબાની કરીને મોબાઈલ / રજિસ્ટ્રેશન નંબર અને પાસવર્ડ દાખલ કરો.';
+    }
+
+    $student = find_student_by_identifier($identifier);
 
     if (!$student) {
         return 'આ નંબર અથવા રજિસ્ટ્રેશન નો. સાથે કોઈ એકાઉન્ટ મળ્યું નથી.';

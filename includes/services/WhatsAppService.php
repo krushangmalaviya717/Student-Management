@@ -277,4 +277,36 @@ class WhatsAppService
 
         return true;
     }
+
+    /**
+     * Send student login OTP directly via Meta WhatsApp Cloud API
+     */
+    public static function sendStudentLoginOtp(string $toPhone, string $otpCode, string $studentName = ''): array
+    {
+        $config = self::getConfig();
+        if ($config['phone_number_id'] === '' || $config['access_token'] === '') {
+            return ['success' => false, 'error' => 'not_configured', 'message' => 'WhatsApp Meta API is not configured in Settings yet.'];
+        }
+
+        $greeting = $studentName !== '' ? "નમસ્તે {$studentName}," : "નમસ્તે,";
+        
+        $textBody = "🔐 *Devangi Classes - Student Login*\n"
+            . "----------------------------------------\n"
+            . "{$greeting}\n"
+            . "તમારો સ્ટુડન્ટ પોર્ટલ લોગિન OTP છે: *{$otpCode}*\n\n"
+            . "⏱️ આ OTP 5 મિનિટ માટે માન્ય છે.\n"
+            . "સુરક્ષા માટે આ OTP કોઈની પણ સાથે શેર કરશો નહીં.\n"
+            . "----------------------------------------\n"
+            . "Devangi Sewing Classes Surat";
+
+        $payload = [
+            'type' => 'text',
+            'text' => [
+                'preview_url' => false,
+                'body' => $textBody,
+            ],
+        ];
+
+        return self::sendMetaMessage($toPhone, $payload, $config);
+    }
 }
