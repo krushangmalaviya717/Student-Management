@@ -33,12 +33,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism Header */
+/* Mobile App Shell Constraint */
 .app-header {
+  max-width: 480px;
+  margin: 0 auto;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 14px 20px;
+  padding: 14px 18px;
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -46,6 +48,92 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
+}
+
+/* Mobile Login Screen */
+.login-screen {
+  max-width: 460px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 24px 16px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.login-logo {
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 12px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.9rem;
+  box-shadow: 0 10px 24px -6px rgba(30, 58, 138, 0.4);
+}
+
+.login-title {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--secondary);
+  margin: 0 0 4px;
+  letter-spacing: -0.3px;
+}
+
+.login-subtitle {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 500;
+}
+
+.login-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 20px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-soft);
+}
+
+.pwa-install-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+  color: #ffffff;
+  border-radius: 18px;
+  padding: 18px 16px;
+  margin-bottom: 18px;
+  box-shadow: 0 12px 26px -6px rgba(30, 58, 138, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.pwa-install-big-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: none;
+  background: #ffffff;
+  color: #1e3a8a;
+  font-weight: 800;
+  font-size: 1.02rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pwa-install-big-btn:active {
+  transform: scale(0.98);
 }
 
 .brand {
@@ -78,9 +166,11 @@ body {
 /* Floating Bottom Navigation */
 .mobile-bottom-nav {
   position: fixed;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 28px);
+  max-width: 452px;
   background: #ffffff;
   display: flex;
   justify-content: space-around;
@@ -123,9 +213,9 @@ body {
 
 /* Container */
 .container-app {
-  max-width: 600px;
+  max-width: 480px;
   margin: 0 auto;
-  padding: 18px 16px;
+  padding: 16px 14px;
 }
 
 /* Cards */

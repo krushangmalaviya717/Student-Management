@@ -2,14 +2,116 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/functions.php';
 
+const STUDENT_REMEMBER_COOKIE = 'devangi_student_remember';
+const STUDENT_REMEMBER_DAYS = 180;
+
 function current_student(): ?array
 {
     return $_SESSION['student'] ?? null;
 }
 
+function student_remember_secret(): string
+{
+    return defined('API_SECRET_KEY') && API_SECRET_KEY !== '' ? API_SECRET_KEY : 'devangi_student_remember_key_2026';
+}
+
+function set_student_remember_cookie(int $studentId, string $passwordHash): void
+{
+    $expires = time() + (STUDENT_REMEMBER_DAYS * 86400);
+    $pwSlice = substr($passwordHash, 0, 16);
+    $payload = $studentId . '|' . $expires;
+    $sig = hash_hmac('sha256', $payload . '|' . $pwSlice, student_remember_secret());
+    $token = rtrim(strtr(base64_encode($payload . '|' . $sig), '+/', '-_'), '=');
+
+    setcookie(STUDENT_REMEMBER_COOKIE, $token, [
+        'expires'  => $expires,
+        'path'     => '/',
+        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function clear_student_remember_cookie(): void
+{
+    setcookie(STUDENT_REMEMBER_COOKIE, '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    unset($_COOKIE[STUDENT_REMEMBER_COOKIE]);
+}
+
+function restore_student_from_remember_cookie(): bool
+{
+    $raw = $_COOKIE[STUDENT_REMEMBER_COOKIE] ?? '';
+    if ($raw === '') {
+        return false;
+    }
+
+    $decoded = base64_decode(strtr($raw, '-_', '+/'), true);
+    if ($decoded === false) {
+        clear_student_remember_cookie();
+        return false;
+    }
+
+    $parts = explode('|', $decoded, 3);
+    if (count($parts) !== 3) {
+        clear_student_remember_cookie();
+        return false;
+    }
+
+    [$studentIdStr, $expiresStr, $sig] = $parts;
+    $studentId = (int)$studentIdStr;
+    $expires = (int)$expiresStr;
+
+    if ($studentId <= 0 || $expires < time()) {
+        clear_student_remember_cookie();
+        return false;
+    }
+
+    try {
+        $stmt = db()->prepare(
+            "SELECT s.*, b.name AS joined_batch_name, b.start_time, b.end_time, b.batch_days,
+                    pb.name AS preferred_batch_name
+             FROM students s
+             LEFT JOIN batches b ON s.joined_batch_id = b.id
+             LEFT JOIN batches pb ON s.preferred_batch_id = pb.id
+             WHERE s.id = ?
+             LIMIT 1"
+        );
+        $stmt->execute([$studentId]);
+        $student = $stmt->fetch();
+    } catch (Throwable $e) {
+        return false;
+    }
+
+    if (!$student || in_array($student['status'] ?? '', ['cancelled', 'inactive'], true)) {
+        clear_student_remember_cookie();
+        return false;
+    }
+
+    $hash = (string)($student['password_hash'] ?? '');
+    $expectedSig = hash_hmac('sha256', $studentId . '|' . $expires . '|' . substr($hash, 0, 16), student_remember_secret());
+    if (!hash_equals($expectedSig, $sig)) {
+        clear_student_remember_cookie();
+        return false;
+    }
+
+    unset($student['password_hash']);
+    $_SESSION['student'] = $student;
+    set_student_remember_cookie($studentId, $hash);
+    return true;
+}
+
 function is_student_logged_in(): bool
 {
-    return isset($_SESSION['student']) && !empty($_SESSION['student']['id']);
+    if (isset($_SESSION['student']) && !empty($_SESSION['student']['id'])) {
+        return true;
+    }
+    return restore_student_from_remember_cookie();
 }
 
 function require_student_login(): void
@@ -72,9 +174,11 @@ function attempt_student_login(string $identifier, string $password): ?string
         return 'પાસવર્ડ ખોટો છે.';
     }
 
-    // Set student session
+    // Set student session & persistent 180-day remember cookie
+    $finalHash = (string)($newHash ?? $hash ?? '');
     unset($student['password_hash']);
     $_SESSION['student'] = $student;
+    set_student_remember_cookie((int)$student['id'], $finalHash);
 
     return null; // Success
 }
@@ -82,6 +186,7 @@ function attempt_student_login(string $identifier, string $password): ?string
 function student_logout(): void
 {
     unset($_SESSION['student']);
+    clear_student_remember_cookie();
 }
 
 function reload_student_session(): void

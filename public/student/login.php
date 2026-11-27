@@ -35,27 +35,21 @@ require_once __DIR__ . '/includes/header.php';
         <p class="login-subtitle">સ્ટુડન્ટ મેનેજમેન્ટ પોર્ટલ</p>
     </div>
 
-    <!-- PWA Install Banner (Mandatory on mobile browser) v3 -->
-    <div id="pwaInstallCard" class="card-app mb-4" style="padding: 16px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 14px; box-shadow: 0 4px 12px rgba(30, 58, 138, 0.25);">
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center gap-2">
-                <div style="background: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
-                    <i class="bi bi-phone"></i>
-                </div>
-                <div>
-                    <div class="fw-bold" style="font-size: 0.95rem;">એપ ડાઉનલોડ કરો</div>
-                    <div class="small opacity-75" style="font-size: 0.75rem;">હોમ સ્ક્રીન પર ઉમેરીને વાપરો</div>
-                </div>
+    <!-- PWA Install Banner (Prominent on mobile browser) -->
+    <div id="pwaInstallCard" class="pwa-install-card">
+        <div class="d-flex align-items-center gap-3">
+            <div style="background: rgba(255,255,255,0.18); width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
+                <i class="bi bi-phone-fill"></i>
             </div>
-            <button type="button" class="btn btn-sm bg-white rounded-pill px-3 py-2 fw-bold pwa-install-trigger" style="color: #1e3a8a; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" onclick="triggerPwaInstall();">
-                <i class="bi bi-download me-1"></i> ઇન્સ્ટોલ
-            </button>
+            <div>
+                <div class="fw-bold" style="font-size: 1.05rem;">Devangi Classes Mobile App</div>
+                <div class="opacity-75" style="font-size: 0.82rem;">ફોનમાં એપની જેમ વાપરવા માટે હોમ સ્ક્રીન પર ઇન્સ્ટોલ કરો</div>
+            </div>
         </div>
-    </div>
-
-    <!-- Live Auto-Deploy Test Banner -->
-    <div style="background: #16a34a; color: #ffffff; text-align: center; font-weight: 700; padding: 12px; border-radius: 12px; margin-bottom: 20px; font-size: 1.05rem; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);">
-        🚀 GIT AUTO-DEPLOY IS WORKING! (ટેસ્ટ સફળ)
+        <button type="button" class="pwa-install-big-btn pwa-install-trigger" onclick="triggerPwaInstall();">
+            <i class="bi bi-download fs-5"></i>
+            <span>મોબાઈલ એપ ઇન્સ્ટોલ કરો (Install App)</span>
+        </button>
     </div>
 
     <div class="login-card">

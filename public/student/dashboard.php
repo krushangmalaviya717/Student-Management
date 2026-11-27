@@ -107,20 +107,21 @@ if ($s['entry_date'] && $s['final_expiry_date']) {
 </div>
 <?php endif; ?>
 
-<!-- PWA Install Banner on Dashboard v2 -->
-<div id="pwaInstallCard" class="card-app mb-3 pwa-install-trigger" style="padding: 12px 16px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(30, 58, 138, 0.2);">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-phone fs-4"></i>
-            <div>
-                <div class="fw-bold" style="font-size: 0.88rem;">એપ ઇન્સ્ટોલ કરો</div>
-                <div class="small opacity-75" style="font-size: 0.72rem;">ઝડપી એક્સેસ માટે હોમ સ્ક્રીન પર રાખો</div>
-            </div>
+<!-- PWA Install Banner on Dashboard -->
+<div id="pwaInstallCard" class="pwa-install-card mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <div style="background: rgba(255,255,255,0.18); width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;">
+            <i class="bi bi-phone-fill"></i>
         </div>
-        <button type="button" class="btn btn-sm bg-white text-primary rounded-pill px-3 py-1 fw-bold" onclick="triggerPwaInstall();">
-            <i class="bi bi-download me-1"></i> ઇન્સ્ટોલ
-        </button>
+        <div>
+            <div class="fw-bold" style="font-size: 0.95rem;">મોબાઈલ એપ ઇન્સ્ટોલ કરો</div>
+            <div class="opacity-75" style="font-size: 0.78rem;">ઝડપી એક્સેસ માટે હોમ સ્ક્રીન પર રાખો</div>
+        </div>
     </div>
+    <button type="button" class="pwa-install-big-btn pwa-install-trigger" style="padding: 11px 14px; font-size: 0.95rem;" onclick="triggerPwaInstall();">
+        <i class="bi bi-download"></i>
+        <span>એપ ઇન્સ્ટોલ કરો (Install App)</span>
+    </button>
 </div>
 
 <!-- Hero Card -->

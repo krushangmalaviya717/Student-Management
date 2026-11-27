@@ -2,7 +2,7 @@
   "name": "Devangi Sewing Classes - Student Portal",
   "short_name": "Devangi Classes",
   "description": "Student Management Portal for Devangi Sewing Classes",
-  "start_url": "/public/student/login.php",
+  "start_url": "/public/student/dashboard.php",
   "id": "/public/student/",
   "scope": "/public/student/",
   "display": "standalone",
