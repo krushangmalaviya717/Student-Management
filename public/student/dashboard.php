@@ -162,6 +162,23 @@ if ($s['entry_date'] && $s['final_expiry_date']) {
     </div>
 </div>
 
+<?php if (($s['form_status'] ?? '') === 'draft' || ($s['status'] ?? '') === 'draft'): ?>
+<!-- Form Registration Pending Confirmation Banner -->
+<div class="card-app mb-3" style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1.5px solid #FDE68A;">
+    <div class="d-flex align-items-center gap-3">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: #fff; color: #D97706; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; border: 1px solid #FCD34D;">
+            <i class="bi bi-clock-history"></i>
+        </div>
+        <div>
+            <div class="fw-bold mb-1" style="color: #92400E; font-size: 0.95rem;">ફોર્મ સબમિટ થયેલ છે (Registration Pending)</div>
+            <div class="small" style="color: #78350F; line-height: 1.4;">
+                તમારું ફોર્મ સફળતાપૂર્વક નોંધાઈ ગયું છે. ફોર્મ ફી (₹<?= number_format(!empty($s['form_fee_amount']) ? (float)$s['form_fee_amount'] : 500, 0) ?>) જમા થયા બાદ તમારો રજીસ્ટ્રેશન નંબર કન્ફર્મ થશે અને બેચ ફાળવવામાં આવશે.
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- ================= COURSE PAUSED / ON-HOLD SPECIAL SECTION ================= -->
 <?php if ($isPaused): ?>
 <div class="card-app" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1.5px solid #fde68a; position: relative; overflow: hidden; margin-bottom: 20px;">

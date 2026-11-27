@@ -150,7 +150,7 @@ $stageLabels = [
     <div class="p-2 px-3 rounded-3 mb-3 d-flex align-items-center" style="background: #fffbeb; border: 1px solid #fde68a;">
         <i class="bi bi-exclamation-triangle-fill me-2 fs-5" style="color: #d97706 !important;"></i>
         <div class="small" style="color: #92400e;">
-            <strong>ધ્યાન આપો:</strong> આપની <strong>₹<?= number_format($totalDueOverall, 2) ?></strong> ની એક્સટેન્શન ફી બાકી છે. કૃપા કરીને કાઉન્ટર પર જમા કરાવો.
+            <strong>ધ્યાન આપો:</strong> આપની <strong>₹<?= number_format($totalDueOverall, 2) ?></strong> ની ફી બાકી છે. કૃપા કરીને કાઉન્ટર પર જમા કરાવો.
         </div>
     </div>
     <?php endif; ?>
