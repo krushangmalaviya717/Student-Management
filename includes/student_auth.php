@@ -133,8 +133,18 @@ function require_student_login(): void
 function attempt_student_login(string $identifier, string $password): ?string
 {
     $identifier = trim($identifier);
+    $password = trim($password);
     if (empty($identifier) || empty($password)) {
         return 'મહેરબાની કરીને મોબાઈલ / રજિસ્ટ્રેશન નંબર અને પાસવર્ડ દાખલ કરો.';
+    }
+
+    // Sanitize mobile format (+91, leading 0, spaces, dashes)
+    $digitsOnly = preg_replace('/\D+/', '', $identifier);
+    $cleanMobile = $digitsOnly;
+    if (strlen($digitsOnly) === 12 && str_starts_with($digitsOnly, '91')) {
+        $cleanMobile = substr($digitsOnly, 2);
+    } elseif (strlen($digitsOnly) === 11 && str_starts_with($digitsOnly, '0')) {
+        $cleanMobile = substr($digitsOnly, 1);
     }
 
     $stmt = db()->prepare(
@@ -143,10 +153,14 @@ function attempt_student_login(string $identifier, string $password): ?string
          FROM students s
          LEFT JOIN batches b ON s.joined_batch_id = b.id
          LEFT JOIN batches pb ON s.preferred_batch_id = pb.id
-         WHERE s.student_mobile = ? OR s.registration_no = ? OR s.form_no = ?
+         WHERE s.student_mobile = ? 
+            OR s.student_mobile = ?
+            OR REPLACE(REPLACE(s.student_mobile, ' ', ''), '-', '') = ?
+            OR s.registration_no = ? 
+            OR s.form_no = ?
          LIMIT 1"
     );
-    $stmt->execute([$identifier, $identifier, $identifier]);
+    $stmt->execute([$identifier, $cleanMobile, $cleanMobile, $identifier, $identifier]);
     $student = $stmt->fetch();
 
     if (!$student) {
@@ -167,8 +181,16 @@ function attempt_student_login(string $identifier, string $password): ?string
         }
     }
     
-    // Fallback: If password_hash is not set or matches raw mobile number
-    if (!$validPassword && (empty($hash) || $password === $student['student_mobile'])) {
+    // Fallback: If password_hash is not set or matches raw/clean mobile number (first-time login)
+    $studentCleanMobile = preg_replace('/\D+/', '', (string)$student['student_mobile']);
+    $enteredPwClean = preg_replace('/\D+/', '', $password);
+    $isFirstTimeMobileMatch = (
+        $password === $student['student_mobile'] ||
+        $password === $cleanMobile ||
+        ($enteredPwClean !== '' && $enteredPwClean === $studentCleanMobile)
+    );
+
+    if (!$validPassword && (empty($hash) || $isFirstTimeMobileMatch)) {
         $validPassword = true;
         // Update hash
         $newHash = password_hash($password, PASSWORD_DEFAULT);
