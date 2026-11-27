@@ -628,7 +628,25 @@ class StudentService
         $isEdit = !empty($options['is_edit']);
         $hasPhoto = !empty($options['has_photo']);
 
-        $name = trim((string)($post['name'] ?? ''));
+        $surname = trim((string)($post['surname'] ?? ''));
+        $firstName = trim((string)($post['first_name'] ?? ''));
+        $fatherHusbandName = trim((string)($post['father_husband_name'] ?? ''));
+        $directName = trim((string)($post['name'] ?? ''));
+
+        // Sequence requested by user: Surname + Name + Father's/Husband's Name
+        if ($surname !== '' || $firstName !== '' || $fatherHusbandName !== '') {
+            $nameParts = array_filter([$surname, $firstName, $fatherHusbandName], fn($p) => $p !== '');
+            $name = trim(implode(' ', $nameParts));
+        } else {
+            $name = $directName;
+            if ($name !== '') {
+                $parts = preg_split('/\s+/', $name, 3);
+                $surname = $parts[0] ?? '';
+                $firstName = $parts[1] ?? '';
+                $fatherHusbandName = $parts[2] ?? '';
+            }
+        }
+
         $studentMobile = trim((string)($post['student_mobile'] ?? ''));
         $fatherMobile = trim((string)($post['husband_father_mobile'] ?? ''));
         $homeMobile = trim((string)($post['home_mobile'] ?? ''));
@@ -642,8 +660,8 @@ class StudentService
         $guardianRelation = trim((string)($post['guardian_relation'] ?? ''));
 
         $missing = [];
-        if ($name === '') {
-            $missing[] = 'Student Name';
+        if ($name === '' || ($surname === '' && $firstName === '')) {
+            $missing[] = 'Student Name (અટક & નામ)';
         }
         if ($cfg['student_mobile']['required'] && $studentMobile === '') {
             $missing[] = 'Student Mobile';
@@ -693,6 +711,9 @@ class StudentService
 
         return [
             'name' => $name,
+            'surname' => $surname !== '' ? $surname : null,
+            'first_name' => $firstName !== '' ? $firstName : null,
+            'father_husband_name' => $fatherHusbandName !== '' ? $fatherHusbandName : null,
             'student_mobile' => $studentMobile,
             'husband_father_mobile' => $fatherMobile !== '' ? $fatherMobile : null,
             'home_mobile' => $homeMobile !== '' ? $homeMobile : null,

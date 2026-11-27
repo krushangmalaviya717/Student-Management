@@ -45,16 +45,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $formNo = generate_form_no();
         $stmt = $pdo->prepare(
             "INSERT INTO students
-                (form_no, form_submit_date, form_status, name, age, student_mobile,
+                (form_no, form_submit_date, form_status, surname, first_name, father_husband_name, name, age, student_mobile,
                  husband_father_mobile, home_mobile, education, address,
                  knows_sewing, previous_sewing_work, hear_about_us, guardian_signature_name, guardian_relation,
                  preferred_batch_id, any_batch, photo_path, status, created_by,
                  form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee)
-             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?,
+             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?,
                  ?, ?, ?, ?)"
         );
         $stmt->execute([
             $formNo,
+            $data['surname'],
+            $data['first_name'],
+            $data['father_husband_name'],
             $data['name'],
             $data['age'],
             $data['student_mobile'],
@@ -269,13 +272,37 @@ require_once __DIR__ . '/../includes/layout_header.php';
         </div>
 
         <div class="section-title">Personal &amp; Contact Details</div>
-        <div class="row form-group">
-            <div class="<?= !$fields['age']['visible'] ? 'col-full' : '' ?>">
-                <label for="reg_name">Student Name <span class="req-star">*</span></label>
-                <input type="text" id="reg_name" name="name" required value="<?= e($_POST['name'] ?? '') ?>">
-            </div>
-            <?php if ($fields['age']['visible']): ?>
+        
+        <!-- Separate Surname, Student Name, and Father/Husband Name -->
+        <div class="row3 form-group" style="margin-bottom: 8px;">
             <div>
+                <label for="reg_surname">અટક (Surname) <span class="req-star">*</span></label>
+                <input type="text" id="reg_surname" name="surname" required value="<?= e($_POST['surname'] ?? '') ?>" placeholder="દા.ત. ધામેલીયા / પટેલ" oninput="updateFullNamePreview()">
+            </div>
+            <div>
+                <label for="reg_first_name">વિદ્યાર્થીનું નામ (Student Name) <span class="req-star">*</span></label>
+                <input type="text" id="reg_first_name" name="first_name" required value="<?= e($_POST['first_name'] ?? '') ?>" placeholder="દા.ત. મોનિકા / રીનાબેન" oninput="updateFullNamePreview()">
+            </div>
+            <div>
+                <label for="reg_father_husband">પિતા / પતિનું નામ (Father / Husband Name)</label>
+                <input type="text" id="reg_father_husband" name="father_husband_name" value="<?= e($_POST['father_husband_name'] ?? '') ?>" placeholder="દા.ત. હાર્દિકભાઈ / રમેશભાઈ" oninput="updateFullNamePreview()">
+            </div>
+        </div>
+
+        <div class="form-group p-2 rounded-2 mb-3" style="background: #F8FAFC; border: 1px dashed #CBD5E1; font-size: 13px;">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="text-muted fw-semibold">ફોર્મમાં લખાતું પૂરું નામ (Full Name):</span>
+                    <strong id="fullNamePreview" class="text-primary font-monospace ms-2" style="font-size: 14px;">-</strong>
+                </div>
+                <small class="text-muted">(ક્રમ: <b>અટક + નામ + પિતા/પતિનું નામ</b>)</small>
+            </div>
+            <input type="hidden" id="reg_name" name="name" value="<?= e($_POST['name'] ?? '') ?>">
+        </div>
+
+        <div class="row form-group">
+            <?php if ($fields['age']['visible']): ?>
+            <div class="col-full">
                 <label for="reg_age">Age <?= $fields['age']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
                 <input type="number" id="reg_age" name="age" min="1" <?= $fields['age']['required'] ? 'required' : '' ?> value="<?= e($_POST['age'] ?? '') ?>">
             </div>
@@ -577,6 +604,18 @@ if (canvasWrapper) {
         isDragging = false;
     });
 }
+
+function updateFullNamePreview() {
+    var surname = (document.getElementById('reg_surname')?.value || '').trim();
+    var first = (document.getElementById('reg_first_name')?.value || '').trim();
+    var father = (document.getElementById('reg_father_husband')?.value || '').trim();
+    var full = [surname, first, father].filter(Boolean).join(' ');
+    var preview = document.getElementById('fullNamePreview');
+    var hidden = document.getElementById('reg_name');
+    if (preview) preview.textContent = full || '-';
+    if (hidden) hidden.value = full;
+}
+document.addEventListener('DOMContentLoaded', updateFullNamePreview);
 
 function closeCropModal() {
     cropModal.style.display = 'none';

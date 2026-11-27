@@ -63,16 +63,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $formNo = generate_form_no();
         $stmt = $pdo->prepare(
             "INSERT INTO students
-                (form_no, form_submit_date, form_status, name, age, student_mobile,
+                (form_no, form_submit_date, form_status, surname, first_name, father_husband_name, name, age, student_mobile,
                  husband_father_mobile, home_mobile, education, address,
                  knows_sewing, previous_sewing_work, hear_about_us, guardian_signature_name, guardian_relation,
                  preferred_batch_id, any_batch, photo_path, status, created_by,
                  form_fee_amount, joining_fee_amount, second_payment_amount, total_course_fee)
-             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NULL,
+             VALUES (?, NOW(), 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', NULL,
                  ?, ?, ?, ?)"
         );
         $stmt->execute([
             $formNo,
+            $data['surname'],
+            $data['first_name'],
+            $data['father_husband_name'],
             $data['name'],
             $data['age'],
             $data['student_mobile'],
@@ -173,9 +176,38 @@ require_once __DIR__ . '/includes/header.php';
         <form method="POST" enctype="multipart/form-data" class="card-app">
             <?= csrf_field() ?>
 
-            <div class="form-group">
-                <label class="form-label">વિદ્યાર્થીનું પૂરું નામ (Full Name) *</label>
-                <input type="text" name="name" class="form-control-app" required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>" placeholder="દા.ત. પટેલ રીનાબેન રમેશભાઈ">
+            <!-- 3 Separate Name Boxes: Surname, Name, Father/Husband Name -->
+            <div class="row g-2 mb-2">
+                <div class="col-12 col-sm-4">
+                    <div class="form-group mb-0">
+                        <label class="form-label">અટક (Surname) *</label>
+                        <input type="text" id="apply_surname" name="surname" class="form-control-app" required value="<?= htmlspecialchars($_POST['surname'] ?? '') ?>" placeholder="દા.ત. ધામેલીયા / પટેલ" oninput="updateApplyFullName()">
+                    </div>
+                </div>
+                <div class="col-12 col-sm-4">
+                    <div class="form-group mb-0">
+                        <label class="form-label">વિદ્યાર્થીનું નામ (Name) *</label>
+                        <input type="text" id="apply_first_name" name="first_name" class="form-control-app" required value="<?= htmlspecialchars($_POST['first_name'] ?? '') ?>" placeholder="દા.ત. મોનિકા / રીનાબેન" oninput="updateApplyFullName()">
+                    </div>
+                </div>
+                <div class="col-12 col-sm-4">
+                    <div class="form-group mb-0">
+                        <label class="form-label">પિતા / પતિનું નામ</label>
+                        <input type="text" id="apply_father_husband" name="father_husband_name" class="form-control-app" value="<?= htmlspecialchars($_POST['father_husband_name'] ?? '') ?>" placeholder="દા.ત. હાર્દિકભાઈ / રમેશભાઈ" oninput="updateApplyFullName()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full Name Live Badge Preview -->
+            <div class="p-2 rounded-2 mb-3" style="background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 0.84rem;">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-1">
+                    <div>
+                        <span class="text-muted fw-semibold">ફોર્મમાં લખાતું પૂરું નામ:</span>
+                        <strong id="applyFullNamePreview" class="text-primary font-monospace ms-1">-</strong>
+                    </div>
+                    <small class="text-muted">(અટક + નામ + પિતા/પતિનું નામ)</small>
+                </div>
+                <input type="hidden" id="apply_name" name="name" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
             </div>
 
             <div class="form-group">
@@ -354,5 +386,19 @@ require_once __DIR__ . '/includes/header.php';
 
     <?php endif; ?>
 </div>
+
+<script>
+function updateApplyFullName() {
+    var surname = (document.getElementById('apply_surname')?.value || '').trim();
+    var first = (document.getElementById('apply_first_name')?.value || '').trim();
+    var father = (document.getElementById('apply_father_husband')?.value || '').trim();
+    var full = [surname, first, father].filter(Boolean).join(' ');
+    var preview = document.getElementById('applyFullNamePreview');
+    var hidden = document.getElementById('apply_name');
+    if (preview) preview.textContent = full || '-';
+    if (hidden) hidden.value = full;
+}
+document.addEventListener('DOMContentLoaded', updateApplyFullName);
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

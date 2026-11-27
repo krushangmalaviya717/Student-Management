@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS students (
     confirmed_at DATETIME DEFAULT NULL,
 
     -- Personal details
+    surname VARCHAR(100) DEFAULT NULL,
+    first_name VARCHAR(100) DEFAULT NULL,
+    father_husband_name VARCHAR(100) DEFAULT NULL,
     name VARCHAR(150) NOT NULL,
     age INT UNSIGNED DEFAULT NULL,
     student_mobile VARCHAR(20) NOT NULL,

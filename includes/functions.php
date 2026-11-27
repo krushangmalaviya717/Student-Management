@@ -107,8 +107,17 @@ function ensure_database_schema_ready(PDO $pdo): void
     $executed = true;
 
     try {
-        // 1. Ensure students table has password_hash and lifecycle columns
+        // 1. Ensure students table has password_hash, lifecycle columns, and split name columns
         $studentCols = $pdo->query("SHOW COLUMNS FROM students")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('surname', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN surname VARCHAR(100) DEFAULT NULL AFTER form_status");
+        }
+        if (!in_array('first_name', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN first_name VARCHAR(100) DEFAULT NULL AFTER surname");
+        }
+        if (!in_array('father_husband_name', $studentCols, true)) {
+            $pdo->exec("ALTER TABLE students ADD COLUMN father_husband_name VARCHAR(100) DEFAULT NULL AFTER first_name");
+        }
         if (!in_array('password_hash', $studentCols, true)) {
             $pdo->exec("ALTER TABLE students ADD COLUMN password_hash VARCHAR(255) DEFAULT NULL AFTER student_mobile");
         }
@@ -269,7 +278,7 @@ function ensure_database_schema_ready(PDO $pdo): void
         // 7. Record migration done in settings
         $pdo->prepare("
             INSERT INTO settings (setting_key, setting_value, setting_group, description)
-            VALUES ('_schema_v6_ready', '1', 'system', 'Auto-migration complete for all tables, columns, and student login OTP')
+            VALUES ('_schema_v7_ready', '1', 'system', 'Auto-migration complete for all tables, split names (surname, first_name, father_husband_name), and student login OTP')
             ON DUPLICATE KEY UPDATE setting_value = '1'
         ")->execute();
 

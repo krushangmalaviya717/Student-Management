@@ -76,7 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
 
         $sql = "UPDATE students SET 
-                name = ?, age = ?, student_mobile = ?, husband_father_mobile = ?, home_mobile = ?, 
+                surname = ?, first_name = ?, father_husband_name = ?, name = ?,
+                age = ?, student_mobile = ?, husband_father_mobile = ?, home_mobile = ?, 
                 education = ?, address = ?, knows_sewing = ?, previous_sewing_work = ?,
                 hear_about_us = ?, guardian_signature_name = ?, guardian_relation = ?, photo_path = ?,
                 form_no = ?, registration_no = ?, 
@@ -87,6 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
+            $data['surname'],
+            $data['first_name'],
+            $data['father_husband_name'],
             $data['name'],
             $data['age'],
             $data['student_mobile'],
@@ -193,15 +197,52 @@ require_once __DIR__ . '/../includes/layout_header.php';
         <div class="flash flash-error"><?= e($error) ?></div>
     <?php endif; ?>
 
+    <?php
+    $currSurname = $_POST['surname'] ?? ($student['surname'] ?? '');
+    $currFirstName = $_POST['first_name'] ?? ($student['first_name'] ?? '');
+    $currFatherHusband = $_POST['father_husband_name'] ?? ($student['father_husband_name'] ?? '');
+
+    if ($currSurname === '' && $currFirstName === '' && !empty($student['name'])) {
+        $parts = preg_split('/\s+/', trim((string)$student['name']), 3);
+        $currSurname = $parts[0] ?? '';
+        $currFirstName = $parts[1] ?? '';
+        $currFatherHusband = $parts[2] ?? '';
+    }
+    ?>
+
     <form method="post" enctype="multipart/form-data">
         <?= csrf_field() ?>
 
         <div class="section-title">Personal Information</div>
-        <div class="row form-group">
-            <div class="<?= !$fields['age']['visible'] ? 'col-full' : '' ?>">
-                <label for="edit_name">Full Name <span class="req-star">*</span></label>
-                <input type="text" id="edit_name" name="name" value="<?= e($_POST['name'] ?? $student['name']) ?>" required>
+
+        <!-- Separate Surname, Student Name, and Father/Husband Name -->
+        <div class="row3 form-group" style="margin-bottom: 8px;">
+            <div>
+                <label for="edit_surname">અટક (Surname) <span class="req-star">*</span></label>
+                <input type="text" id="edit_surname" name="surname" required value="<?= e($currSurname) ?>" placeholder="દા.ત. ધામેલીયા / પટેલ" oninput="updateEditFullName()">
             </div>
+            <div>
+                <label for="edit_first_name">વિદ્યાર્થીનું નામ (Student Name) <span class="req-star">*</span></label>
+                <input type="text" id="edit_first_name" name="first_name" required value="<?= e($currFirstName) ?>" placeholder="દા.ત. મોનિકા / રીનાબેન" oninput="updateEditFullName()">
+            </div>
+            <div>
+                <label for="edit_father_husband">પિતા / પતિનું નામ (Father / Husband Name)</label>
+                <input type="text" id="edit_father_husband" name="father_husband_name" value="<?= e($currFatherHusband) ?>" placeholder="દા.ત. હાર્દિકભાઈ / રમેશભાઈ" oninput="updateEditFullName()">
+            </div>
+        </div>
+
+        <div class="form-group p-2 rounded-2 mb-3" style="background: #F8FAFC; border: 1px dashed #CBD5E1; font-size: 13px;">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <span class="text-muted fw-semibold">ફોર્મમાં લખાતું પૂરું નામ (Full Name):</span>
+                    <strong id="editFullNamePreview" class="text-primary font-monospace ms-2" style="font-size: 14px;">-</strong>
+                </div>
+                <small class="text-muted">(ક્રમ: <b>અટક + નામ + પિતા/પતિનું નામ</b>)</small>
+            </div>
+            <input type="hidden" id="edit_name" name="name" value="<?= e($_POST['name'] ?? $student['name']) ?>">
+        </div>
+
+        <div class="row form-group">
             <?php if ($fields['age']['visible']): ?>
             <div>
                 <label for="edit_age">Age <?= $fields['age']['required'] ? '<span class="req-star">*</span>' : '' ?></label>
@@ -386,5 +427,19 @@ require_once __DIR__ . '/../includes/layout_header.php';
         </div>
     </form>
 </div>
+
+<script>
+function updateEditFullName() {
+    var surname = (document.getElementById('edit_surname')?.value || '').trim();
+    var first = (document.getElementById('edit_first_name')?.value || '').trim();
+    var father = (document.getElementById('edit_father_husband')?.value || '').trim();
+    var full = [surname, first, father].filter(Boolean).join(' ');
+    var preview = document.getElementById('editFullNamePreview');
+    var hidden = document.getElementById('edit_name');
+    if (preview) preview.textContent = full || '-';
+    if (hidden) hidden.value = full;
+}
+document.addEventListener('DOMContentLoaded', updateEditFullName);
+</script>
 
 <?php require_once __DIR__ . '/../includes/layout_footer.php'; ?>
