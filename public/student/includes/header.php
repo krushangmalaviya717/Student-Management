@@ -17,7 +17,7 @@ $activePage = $activePage ?? 'dashboard';
     <title><?= htmlspecialchars($pageTitle ?? 'Student Portal - Devangi Sewing Classes') ?></title>
     
     <!-- PWA Manifest & Meta Tags -->
-    <link rel="manifest" href="/public/student/manifest.json?v=5">
+    <link rel="manifest" href="/public/student/manifest.json?v=7">
     <meta name="theme-color" content="#1e3a8a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

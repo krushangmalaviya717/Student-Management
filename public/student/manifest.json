@@ -1,9 +1,9 @@
 {
-  "name": "Devangi Sewing Classes - Student Portal",
-  "short_name": "Devangi Classes",
+  "name": "Devangi Sewing Classes",
+  "short_name": "Devangi",
   "description": "Student Management Portal for Devangi Sewing Classes",
   "start_url": "/public/student/login.php",
-  "id": "/public/student/",
+  "id": "/public/student/login.php",
   "scope": "/public/student/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -17,10 +17,22 @@
       "purpose": "any"
     },
     {
+      "src": "/public/student/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/public/student/assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/public/student/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

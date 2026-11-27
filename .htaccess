@@ -2,15 +2,36 @@
 # Blocks direct browser access to source/data folders, archives, and internal scripts.
 
 <IfModule mod_authz_core.c>
-    <FilesMatch "\.(sql|env|log|zip|bak|md|lock|json)$">
+    <FilesMatch "\.(sql|env|log|zip|bak|md|lock)$">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "^(package|package-lock|skills-lock)\.json$">
         Require all denied
     </FilesMatch>
 </IfModule>
 <IfModule !mod_authz_core.c>
-    <FilesMatch "\.(sql|env|log|zip|bak|md|lock|json)$">
+    <FilesMatch "\.(sql|env|log|zip|bak|md|lock)$">
         Order allow,deny
         Deny from all
     </FilesMatch>
+    <FilesMatch "^(package|package-lock|skills-lock)\.json$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+<FilesMatch "manifest\.(json|webmanifest)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .json .webmanifest
 </IfModule>
 
 # Never allow sensitive folders or test scripts to be browsed or fetched directly.

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'devangi-student-v6';
+const CACHE_NAME = 'devangi-student-v7';
 const ASSETS_TO_CACHE = [
   '/public/student/login.php',
   '/public/student/dashboard.php',
