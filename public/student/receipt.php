@@ -1,6 +1,7 @@
 <?php
 $pageTitle = 'પેમેન્ટ પહોંચ - Devangi Classes';
-$activePage = 'fees';
+$activePage = 'receipt';
+$backUrl = '/public/student/fees.php';
 require_once __DIR__ . '/includes/header.php';
 require_student_login();
 

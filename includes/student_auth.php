@@ -93,7 +93,7 @@ function restore_student_from_remember_cookie(): bool
         return false;
     }
 
-    if (!$student || in_array($student['status'] ?? '', ['cancelled', 'inactive'], true)) {
+    if (!$student || in_array($student['status'] ?? '', ['cancelled', 'inactive', 'draft'], true) || ($student['form_status'] ?? 'draft') !== 'confirmed') {
         clear_student_remember_cookie();
         return false;
     }
@@ -169,6 +169,10 @@ function attempt_student_login(string $identifier, string $password): ?string
 
     if ($student['status'] === 'cancelled' || $student['status'] === 'inactive') {
         return 'આ એકાઉન્ટ નિષ્ક્રિય અથવા કેન્સલ થયેલ છે. કૃપા કરીને ઓફિસનો સંપર્ક કરો.';
+    }
+
+    if (($student['form_status'] ?? 'draft') !== 'confirmed' || $student['status'] === 'draft') {
+        return 'તમારું ફોર્મ રજીસ્ટ્રેશન હજુ કન્ફર્મ થયું નથી. ₹500 ફોર્મ ફી જમા કરાવ્યા બાદ જ તમારો નંબર એપમાં લોગિન માટે ચાલુ થશે. કૃપા કરીને ઓફિસનો સંપર્ક કરો.';
     }
 
     // Check password hash

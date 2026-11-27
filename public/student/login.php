@@ -1,5 +1,6 @@
 <?php
 $pageTitle = 'સ્ટુડન્ટ લોગિન - Devangi Classes';
+$activePage = 'login';
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/functions.php';
 require_once __DIR__ . '/../../includes/student_auth.php';
@@ -87,7 +88,25 @@ require_once __DIR__ . '/includes/header.php';
         </form>
     </div>
 
-    <div class="text-center mt-5 text-muted" style="font-size: 0.8rem;">
+    <!-- New Student / Unregistered Visitor Section -->
+    <div class="visitor-card">
+        <div class="text-center mb-3">
+            <div class="fw-bold text-dark" style="font-size: 1rem;">નવા વિદ્યાર્થી છો? (Not Registered Yet?)</div>
+            <div class="text-muted" style="font-size: 0.8rem;">રજીસ્ટ્રેશન વગર પણ તમે એડમિશન ફોર્મ ભરી શકો છો અને ક્લાસની બધી માહિતી જોઈ શકો છો</div>
+        </div>
+        <div class="d-grid gap-2">
+            <a href="/public/student/apply.php" class="visitor-btn-primary">
+                <i class="bi bi-pencil-square fs-5"></i>
+                <span>નવું એડમિશન ફોર્મ ભરો (New Form)</span>
+            </a>
+            <a href="/public/student/info.php" class="visitor-btn-outline">
+                <i class="bi bi-info-circle fs-5"></i>
+                <span>ક્લાસની ફી, બેચ સમય અને નિયમો જુઓ</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="text-center mt-4 text-muted" style="font-size: 0.8rem;">
         &copy; <?= date('Y') ?> Devangi Sewing Classes. All rights reserved.
     </div>
 

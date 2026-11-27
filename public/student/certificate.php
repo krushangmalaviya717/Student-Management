@@ -290,7 +290,7 @@ $businessName = get_setting('business_name', 'DEVANGI SEWING CLASSES');
 <body>
 
 <div class="no-print">
-    <a href="javascript:history.back()" class="btn btn-secondary">&larr; પાછા જાઓ</a>
+    <a href="<?= is_student_logged_in() ? '/public/student/dashboard.php' : '/public/student_profile.php?id=' . (int)$studentId ?>" onclick="if(window.history.length > 1 && document.referrer && document.referrer.indexOf(window.location.host) !== -1){ event.preventDefault(); window.history.back(); }" class="btn btn-secondary">&larr; પાછા જાઓ (Back)</a>
     <div>
         <button onclick="window.print()" class="btn btn-primary">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>

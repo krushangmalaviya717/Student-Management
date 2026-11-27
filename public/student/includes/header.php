@@ -8,6 +8,9 @@ require_once __DIR__ . '/../../../includes/student_auth.php';
 
 $student = current_student();
 $activePage = $activePage ?? 'dashboard';
+$showPublicHeader = $showPublicHeader ?? false;
+$backUrl = $backUrl ?? ($student ? '/public/student/dashboard.php' : '/public/student/login.php');
+$showBackBtn = $showBackBtn ?? ($activePage !== 'dashboard' && $activePage !== 'login');
 ?>
 <!DOCTYPE html>
 <html lang="gu">
@@ -26,6 +29,16 @@ $activePage = $activePage ?? 'dashboard';
 
     <!-- Load PWA script early in head so beforeinstallprompt is never missed -->
     <script src="/public/student/install.js?v=<?= time() ?>"></script>
+    <script>
+    function studentGoBack(e, fallbackUrl) {
+        if (window.history.length > 1 && document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+            if (e) e.preventDefault();
+            window.history.back();
+            return false;
+        }
+        return true;
+    }
+    </script>
 
     <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -39,10 +52,17 @@ $activePage = $activePage ?? 'dashboard';
 <?php if ($student): ?>
 <!-- Top Header -->
 <header class="app-header">
-    <a href="/public/student/dashboard.php" class="brand">
-        <i class="bi bi-scissors"></i>
-        <span>Devangi Classes</span>
-    </a>
+    <div class="header-left">
+        <?php if ($showBackBtn): ?>
+            <a href="<?= htmlspecialchars($backUrl) ?>" onclick="return studentGoBack(event, '<?= htmlspecialchars($backUrl) ?>');" class="header-back-btn" aria-label="Back" title="પાછા જાઓ (Back)">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+        <?php endif; ?>
+        <a href="/public/student/dashboard.php" class="brand">
+            <?php if (!$showBackBtn): ?><i class="bi bi-scissors"></i><?php endif; ?>
+            <span>Devangi Classes</span>
+        </a>
+    </div>
     <div class="header-actions">
         <!-- PWA Install button in header -->
         <button id="pwaInstallBtn" type="button" class="btn btn-sm btn-light text-primary rounded-pill px-3 fw-bold pwa-install-trigger" style="font-size: 0.8rem;" onclick="triggerPwaInstall();">
@@ -53,6 +73,23 @@ $activePage = $activePage ?? 'dashboard';
         </a>
         <a href="/public/student/logout.php" class="text-secondary text-decoration-none fs-5" title="Logout">
             <i class="bi bi-box-arrow-right"></i>
+        </a>
+    </div>
+</header>
+<?php elseif ($showPublicHeader): ?>
+<!-- Public Visitor Top Header with Back Button -->
+<header class="app-header">
+    <div class="header-left">
+        <a href="<?= htmlspecialchars($backUrl) ?>" onclick="return studentGoBack(event, '<?= htmlspecialchars($backUrl) ?>');" class="header-back-btn" aria-label="Back" title="પાછા જાઓ (Back)">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <a href="/public/student/login.php" class="brand">
+            <span>Devangi Classes</span>
+        </a>
+    </div>
+    <div class="header-actions">
+        <a href="/public/student/login.php" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold" style="font-size: 0.8rem;">
+            <i class="bi bi-box-arrow-in-right me-1"></i> Login
         </a>
     </div>
 </header>
