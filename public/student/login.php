@@ -173,6 +173,11 @@ require_once __DIR__ . '/includes/header.php';
                             <div class="small text-muted">
                                 (તમે <b><?= htmlspecialchars($otpState['otp_code'] ?? '123456') ?></b> અથવા <b>123456</b> નાખીને લોગિન કરી શકો છો)
                             </div>
+                            <?php if (!empty($otpState['wa_error']) && defined('APP_DEBUG') && APP_DEBUG): ?>
+                                <div class="mt-2 p-2 rounded bg-white border text-danger text-start" style="font-size: 0.72rem; word-break: break-word;">
+                                    <strong>API Reason:</strong> <?= htmlspecialchars($otpState['wa_error']) ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
 

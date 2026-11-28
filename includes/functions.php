@@ -91,9 +91,9 @@ function load_all_settings(bool $forceReload = false): array
         if (($map['_settings_v2_ready'] ?? '') !== '1') {
             ensure_settings_initialized($pdo, $map);
         }
-        if (($map['_schema_v6_ready'] ?? '') !== '1') {
+        if (($map['_schema_v7_ready'] ?? '') !== '1') {
             ensure_database_schema_ready($pdo);
-            $map['_schema_v6_ready'] = '1';
+            $map['_schema_v7_ready'] = '1';
             $GLOBALS['_APP_SETTINGS_CACHE'] = $map;
         }
     }

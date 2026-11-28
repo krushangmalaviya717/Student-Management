@@ -183,10 +183,20 @@ function send_student_login_otp(string $identifier): array
     }
 
     $pdo = db();
+    load_all_settings();
     $studentId = (int)$student['id'];
     $mobile = trim((string)$student['student_mobile']);
-    
-    // In test mode / without WhatsApp gateway, make OTP simple '123456' or random
+
+    // Server-side 60-second cooldown to prevent spamming WhatsApp OTP requests
+    $lastState = $_SESSION['student_login_otp_state'] ?? null;
+    if (is_array($lastState) && (int)($lastState['student_id'] ?? 0) === $studentId) {
+        $elapsed = time() - (int)($lastState['sent_at'] ?? 0);
+        if ($elapsed < 60 && !empty($lastState['wa_sent'])) {
+            $wait = 60 - $elapsed;
+            return ['success' => false, 'error' => "કૃપા કરીને નવો OTP મંગાવતા પહેલા {$wait} સેકન્ડ રાહ જુઓ."];
+        }
+    }
+
     $otpCode = (string)random_int(100000, 999999);
 
     // Invalidate previous pending login OTPs for this student
@@ -218,7 +228,8 @@ function send_student_login_otp(string $identifier): array
         'identifier' => $identifier,
         'sent_at' => time(),
         'otp_code' => $otpCode,
-        'wa_sent' => $waRes['success']
+        'wa_sent' => $waRes['success'],
+        'wa_error' => (!$waRes['success']) ? ($waRes['error'] ?? $waRes['message'] ?? 'Unknown error') : null,
     ];
 
     return [
@@ -228,6 +239,7 @@ function send_student_login_otp(string $identifier): array
         'masked_mobile' => WhatsAppService::maskPhone($mobile),
         'student_name' => $student['name'],
         'wa_sent' => $waRes['success'],
+        'wa_error' => $_SESSION['student_login_otp_state']['wa_error'],
         'debug_otp' => (!$waRes['success']) ? $otpCode : null
     ];
 }
@@ -269,7 +281,8 @@ function verify_student_login_otp(string $identifier, string $otpCode): ?string
         $isValid = true;
         $pdo->prepare("UPDATE student_login_otps SET status = 'verified', verified_at = NOW() WHERE id = ?")
             ->execute([$otpId]);
-    } elseif ($otpCode === '123456' || $otpCode === '482910' || ($sessionOtp !== '' && $otpCode === $sessionOtp) || (!$waSent && in_array($otpCode, ['123456', '482910', '000000', '111111', $sessionOtp], true))) {
+    } elseif (!$waSent && in_array($otpCode, ['123456', '482910', '000000', '111111', $sessionOtp], true)) {
+        // Fallback test OTPs are only accepted when WhatsApp API was not active/sent
         $isValid = true;
     }
 

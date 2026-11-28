@@ -36,19 +36,33 @@ class WhatsAppService
     }
 
     /**
-     * Get configured WhatsApp API settings & 2 admin numbers
+     * Get configured WhatsApp API settings & admin numbers.
+     * API credentials (Phone Number ID, Access Token, Templates) are read from .env.
+     * Admin notification numbers & enable toggle are read from Settings UI (DB).
      */
     public static function getConfig(): array
     {
+        $dbEnabled = get_setting('wa_otp_enabled', null);
+        $dbMobile1 = trim((string)get_setting('wa_otp_mobile_1', ''));
+        $dbMobile2 = trim((string)get_setting('wa_otp_mobile_2', ''));
+
+        $envToken = trim((string)env('WA_ACCESS_TOKEN', ''));
+        if ($envToken === '') {
+            $envToken = trim((string)env('WHATSAPP_OTP', ''));
+        }
+
         return [
-            'enabled' => get_setting('wa_otp_enabled', '1') === '1',
-            'phone_number_id' => trim((string)get_setting('wa_phone_number_id', '')),
-            'access_token' => trim((string)get_setting('wa_access_token', '')),
-            'api_version' => trim((string)get_setting('wa_api_version', 'v21.0')) ?: 'v21.0',
-            'template_name' => trim((string)get_setting('wa_template_name', '')),
-            'template_lang' => trim((string)get_setting('wa_template_lang', 'en')) ?: 'en',
-            'mobile_1' => trim((string)get_setting('wa_otp_mobile_1', '')),
-            'mobile_2' => trim((string)get_setting('wa_otp_mobile_2', '')),
+            'enabled' => $dbEnabled !== null ? $dbEnabled === '1' : (env('WA_OTP_ENABLED', '1') === '1'),
+            'phone_number_id' => trim((string)env('WA_PHONE_NUMBER_ID', '')),
+            'access_token' => $envToken,
+            'api_version' => trim((string)env('WA_API_VERSION', 'v21.0')) ?: 'v21.0',
+            'template_name' => trim((string)env('WA_TEMPLATE_NAME', '')),
+            'template_lang' => trim((string)env('WA_TEMPLATE_LANG', 'en')) ?: 'en',
+            'student_template_name' => trim((string)env('WA_STUDENT_TEMPLATE_NAME', '')),
+            'student_template_lang' => trim((string)env('WA_STUDENT_TEMPLATE_LANG', 'en')) ?: 'en',
+            'student_template_is_auth' => (string)env('WA_STUDENT_TEMPLATE_IS_AUTH', '0') === '1',
+            'mobile_1' => $dbMobile1 !== '' ? $dbMobile1 : trim((string)env('WA_OTP_MOBILE_1', '')),
+            'mobile_2' => $dbMobile2 !== '' ? $dbMobile2 : trim((string)env('WA_OTP_MOBILE_2', '')),
         ];
     }
 
@@ -63,7 +77,7 @@ class WhatsAppService
         }
 
         if ($config['phone_number_id'] === '' || $config['access_token'] === '') {
-            return ['success' => false, 'error' => 'Meta Phone Number ID or Access Token is not configured in Settings.'];
+            return ['success' => false, 'error' => 'WA_PHONE_NUMBER_ID or WA_ACCESS_TOKEN is not configured in .env file.'];
         }
 
         $url = "https://graph.facebook.com/{$config['api_version']}/{$config['phone_number_id']}/messages";
@@ -284,28 +298,61 @@ class WhatsAppService
     public static function sendStudentLoginOtp(string $toPhone, string $otpCode, string $studentName = ''): array
     {
         $config = self::getConfig();
+        if (!$config['enabled']) {
+            return ['success' => false, 'error' => 'disabled', 'message' => 'WhatsApp OTP is disabled in Settings.'];
+        }
         if ($config['phone_number_id'] === '' || $config['access_token'] === '') {
-            return ['success' => false, 'error' => 'not_configured', 'message' => 'WhatsApp Meta API is not configured in Settings yet.'];
+            return ['success' => false, 'error' => 'not_configured', 'message' => 'WhatsApp Meta API credentials are not configured in .env yet.'];
         }
 
-        $greeting = $studentName !== '' ? "નમસ્તે {$studentName}," : "નમસ્તે,";
-        
-        $textBody = "🔐 *Devangi Classes - Student Login*\n"
-            . "----------------------------------------\n"
-            . "{$greeting}\n"
-            . "તમારો સ્ટુડન્ટ પોર્ટલ લોગિન OTP છે: *{$otpCode}*\n\n"
-            . "⏱️ આ OTP 5 મિનિટ માટે માન્ય છે.\n"
-            . "સુરક્ષા માટે આ OTP કોઈની પણ સાથે શેર કરશો નહીં.\n"
-            . "----------------------------------------\n"
-            . "Devangi Sewing Classes Surat";
+        if ($config['student_template_name'] !== '') {
+            $components = [
+                [
+                    'type' => 'body',
+                    'parameters' => [
+                        ['type' => 'text', 'text' => $otpCode],
+                    ],
+                ],
+            ];
+            if ($config['student_template_is_auth']) {
+                $components[] = [
+                    'type' => 'button',
+                    'sub_type' => 'url',
+                    'index' => '0',
+                    'parameters' => [
+                        ['type' => 'text', 'text' => $otpCode],
+                    ],
+                ];
+            }
 
-        $payload = [
-            'type' => 'text',
-            'text' => [
-                'preview_url' => false,
-                'body' => $textBody,
-            ],
-        ];
+            $payload = [
+                'type' => 'template',
+                'template' => [
+                    'name' => $config['student_template_name'],
+                    'language' => ['code' => $config['student_template_lang']],
+                    'components' => $components,
+                ],
+            ];
+        } else {
+            $greeting = $studentName !== '' ? "નમસ્તે {$studentName}," : "નમસ્તે,";
+
+            $textBody = "🔐 *Devangi Classes - Student Login*\n"
+                . "----------------------------------------\n"
+                . "{$greeting}\n"
+                . "તમારો સ્ટુડન્ટ પોર્ટલ લોગિન OTP છે: *{$otpCode}*\n\n"
+                . "⏱️ આ OTP 5 મિનિટ માટે માન્ય છે.\n"
+                . "સુરક્ષા માટે આ OTP કોઈની પણ સાથે શેર કરશો નહીં.\n"
+                . "----------------------------------------\n"
+                . "Devangi Sewing Classes Surat";
+
+            $payload = [
+                'type' => 'text',
+                'text' => [
+                    'preview_url' => false,
+                    'body' => $textBody,
+                ],
+            ];
+        }
 
         return self::sendMetaMessage($toPhone, $payload, $config);
     }

@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('success', 'Document numbering prefixes updated.');
 
         } elseif ($action === 'update_whatsapp') {
-            $waKeys = ['wa_otp_enabled', 'wa_phone_number_id', 'wa_access_token', 'wa_api_version', 'wa_template_name', 'wa_template_lang', 'wa_otp_mobile_1', 'wa_otp_mobile_2'];
+            $waKeys = ['wa_otp_enabled', 'wa_otp_mobile_1', 'wa_otp_mobile_2'];
             foreach ($waKeys as $key) {
                 $val = isset($_POST[$key]) ? trim((string)$_POST[$key]) : '';
                 if ($key === 'wa_otp_enabled') {
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_setting($key, $val, $uid, 'whatsapp');
             }
             log_audit('settings', null, 'update_whatsapp', null, ['updated_by' => $uid]);
-            flash('success', 'WhatsApp Meta API & OTP settings saved successfully.');
+            flash('success', 'WhatsApp OTP admin numbers & settings saved successfully.');
 
         } elseif ($action === 'test_whatsapp_otp') {
             $res = WhatsAppService::sendOtpToAdmins([
@@ -621,10 +621,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
     <div class="card">
         <div class="card-header-bar">
             <div>
-                <h2>WhatsApp Meta Cloud API &amp; OTP Verification</h2>
+                <h2>WhatsApp OTP Verification</h2>
                 <p class="muted" style="margin: 2px 0 0; font-size: 12.5px;">Automatically sends OTP and fee payment details to the configured admin WhatsApp numbers during fee collection or manual receipt creation.</p>
             </div>
-            <span class="badge badge-green">Meta Official API</span>
+            <span class="badge badge-green">Meta Official API (.env)</span>
         </div>
 
         <form method="post" class="row3">
@@ -634,10 +634,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
 
             <div class="form-group">
                 <label for="wa_mobile_1">Admin WhatsApp Number 1 (Primary) *</label>
-                <input type="text" id="wa_mobile_1" name="wa_otp_mobile_1" value="<?= e($s['wa_otp_mobile_1'] ?? '') ?>" placeholder="e.g. 9879200000 or 919879200000">
+                <input type="text" id="wa_mobile_1" name="wa_otp_mobile_1" required value="<?= e($s['wa_otp_mobile_1'] ?? '') ?>" placeholder="e.g. 9879200000 or 919879200000">
             </div>
             <div class="form-group">
-                <label for="wa_mobile_2">Admin WhatsApp Number 2 (Secondary)</label>
+                <label for="wa_mobile_2">Admin WhatsApp Number 2 (Optional)</label>
                 <input type="text" id="wa_mobile_2" name="wa_otp_mobile_2" value="<?= e($s['wa_otp_mobile_2'] ?? '') ?>" placeholder="e.g. 9879211111 or 919879211111">
             </div>
             <div class="form-group" style="align-self: center;">
@@ -647,29 +647,8 @@ require_once __DIR__ . '/../includes/layout_header.php';
                 </label>
             </div>
 
-            <div class="form-group">
-                <label for="wa_phone_id">Meta Phone Number ID *</label>
-                <input type="text" id="wa_phone_id" name="wa_phone_number_id" value="<?= e($s['wa_phone_number_id'] ?? '') ?>" placeholder="e.g. 109876543210123" style="font-family: monospace;">
-            </div>
-            <div class="form-group wa-span-2">
-                <label for="wa_access_token">Meta Permanent Access Token *</label>
-                <input type="password" id="wa_access_token" name="wa_access_token" value="<?= e($s['wa_access_token'] ?? '') ?>" placeholder="EAAG..." style="font-family: monospace;">
-            </div>
-
-            <div class="form-group">
-                <label for="wa_template_name">Approved Template Name (Optional)</label>
-                <input type="text" id="wa_template_name" name="wa_template_name" value="<?= e($s['wa_template_name'] ?? '') ?>" placeholder="e.g. payment_otp (blank = direct text)" style="font-family: monospace;">
-            </div>
-            <div class="form-group">
-                <label for="wa_template_lang">Template Language Code</label>
-                <input type="text" id="wa_template_lang" name="wa_template_lang" value="<?= e($s['wa_template_lang'] ?? 'en') ?>" placeholder="en or en_US or gu">
-            </div>
-            <div class="form-group">
-                <label for="wa_api_version">Meta Graph API Version</label>
-                <input type="text" id="wa_api_version" name="wa_api_version" value="<?= e($s['wa_api_version'] ?? 'v21.0') ?>" placeholder="v21.0">
-            </div>
-
-            <div class="form-actions col-full" style="margin-top: 4px; justify-content: flex-end;">
+            <div class="form-actions col-full" style="margin-top: 4px; justify-content: space-between; align-items: center;">
+                <small class="muted">API Token &amp; Phone Number ID are securely loaded from server <code>.env</code> configuration.</small>
                 <button class="btn" type="submit">Save WhatsApp Settings</button>
             </div>
         </form>
@@ -679,10 +658,10 @@ require_once __DIR__ . '/../includes/layout_header.php';
             <input type="hidden" name="action" value="test_whatsapp_otp">
             <input type="hidden" name="active_tab" value="whatsapp">
             <span class="muted" style="font-size: 12.5px;">
-                <strong>Template Variables:</strong> If using an approved template, configure 4 body parameters: <code>{{1}}</code> = OTP, <code>{{2}}</code> = Student Name, <code>{{3}}</code> = Amount, <code>{{4}}</code> = Fee Details.
+                Test WhatsApp delivery to the configured admin number(s) above.
             </span>
             <button type="submit" class="btn btn-secondary btn-sm">
-                Send Test OTP to Both Numbers
+                Send Test OTP
             </button>
         </form>
     </div>
